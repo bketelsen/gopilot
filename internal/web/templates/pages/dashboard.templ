@@ -1,0 +1,121 @@
+package pages
+
+import (
+	"fmt"
+	"time"
+	"github.com/bketelsen/gopilot/internal/domain"
+	"github.com/bketelsen/gopilot/internal/web/templates/layouts"
+)
+
+templ Dashboard(running []*domain.RunEntry, retries []*domain.RetryEntry, metrics map[string]int64, maxAgents int) {
+	@layouts.Base("Dashboard") {
+		<div hx-ext="sse" sse-connect="/api/v1/events" sse-swap="agent-update">
+			<!-- Summary Cards -->
+			<div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6" id="summary-cards">
+				@SummaryCard("Active Agents", fmt.Sprintf("%d / %d", len(running), maxAgents))
+				@SummaryCard("Dispatched", fmt.Sprintf("%d", metrics["issues_dispatched"]))
+				@SummaryCard("Completed", fmt.Sprintf("%d", metrics["issues_completed"]))
+				@SummaryCard("Failed", fmt.Sprintf("%d", metrics["issues_failed"]))
+			</div>
+
+			<!-- Active Agents Table -->
+			<div class="bg-white dark:bg-gray-800 rounded-lg shadow mb-6">
+				<div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+					<h2 class="text-lg font-semibold">Active Agents</h2>
+				</div>
+				<div class="overflow-x-auto">
+					<table class="w-full text-sm">
+						<thead class="bg-gray-50 dark:bg-gray-700">
+							<tr>
+								<th class="px-4 py-2 text-left">Issue</th>
+								<th class="px-4 py-2 text-left">Repo</th>
+								<th class="px-4 py-2 text-left">Status</th>
+								<th class="px-4 py-2 text-left">Duration</th>
+								<th class="px-4 py-2 text-left">Attempt</th>
+								<th class="px-4 py-2 text-left">Last Activity</th>
+							</tr>
+						</thead>
+						<tbody>
+							if len(running) == 0 {
+								<tr>
+									<td colspan="6" class="px-4 py-8 text-center text-gray-500">No active agents</td>
+								</tr>
+							}
+							for _, entry := range running {
+								<tr class="border-t border-gray-200 dark:border-gray-700">
+									<td class="px-4 py-2">
+										<a href={ templ.SafeURL(fmt.Sprintf("/issues/%s/%d", entry.Issue.Repo, entry.Issue.ID)) } class="text-blue-500 hover:underline">
+											{ entry.Issue.Identifier() }
+										</a>
+									</td>
+									<td class="px-4 py-2">{ entry.Issue.Repo }</td>
+									<td class="px-4 py-2">
+										<span class="px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">Running</span>
+									</td>
+									<td class="px-4 py-2">{ FormatDuration(entry.Duration()) }</td>
+									<td class="px-4 py-2">{ fmt.Sprintf("%d", entry.Attempt) }</td>
+									<td class="px-4 py-2">{ entry.LastEventAt.Format("15:04:05") }</td>
+								</tr>
+							}
+						</tbody>
+					</table>
+				</div>
+			</div>
+
+			<!-- Retry Queue Table -->
+			<div class="bg-white dark:bg-gray-800 rounded-lg shadow">
+				<div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+					<h2 class="text-lg font-semibold">Retry Queue</h2>
+				</div>
+				<div class="overflow-x-auto">
+					<table class="w-full text-sm">
+						<thead class="bg-gray-50 dark:bg-gray-700">
+							<tr>
+								<th class="px-4 py-2 text-left">Issue</th>
+								<th class="px-4 py-2 text-left">Attempt</th>
+								<th class="px-4 py-2 text-left">Next Retry</th>
+								<th class="px-4 py-2 text-left">Error</th>
+							</tr>
+						</thead>
+						<tbody>
+							if len(retries) == 0 {
+								<tr>
+									<td colspan="4" class="px-4 py-8 text-center text-gray-500">No retries queued</td>
+								</tr>
+							}
+							for _, entry := range retries {
+								<tr class="border-t border-gray-200 dark:border-gray-700">
+									<td class="px-4 py-2">{ entry.Identifier }</td>
+									<td class="px-4 py-2">{ fmt.Sprintf("%d", entry.Attempt) }</td>
+									<td class="px-4 py-2">{ entry.DueAt.Format("15:04:05") }</td>
+									<td class="px-4 py-2 text-red-500">{ entry.Error }</td>
+								</tr>
+							}
+						</tbody>
+					</table>
+				</div>
+			</div>
+		</div>
+	}
+}
+
+templ SummaryCard(title, value string) {
+	<div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4 border-l-4 border-blue-500">
+		<div class="text-sm text-gray-500 dark:text-gray-400">{ title }</div>
+		<div class="text-2xl font-bold mt-1">{ value }</div>
+	</div>
+}
+
+func FormatDuration(d time.Duration) string {
+	d = d.Round(time.Second)
+	h := int(d.Hours())
+	m := int(d.Minutes()) % 60
+	s := int(d.Seconds()) % 60
+	if h > 0 {
+		return fmt.Sprintf("%dh%dm%ds", h, m, s)
+	}
+	if m > 0 {
+		return fmt.Sprintf("%dm%ds", m, s)
+	}
+	return fmt.Sprintf("%ds", s)
+}

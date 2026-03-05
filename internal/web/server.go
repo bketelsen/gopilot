@@ -6,7 +6,7 @@ import (
 
 	"github.com/bketelsen/gopilot/internal/config"
 	"github.com/bketelsen/gopilot/internal/domain"
-	"github.com/bketelsen/gopilot/internal/web/templates/layouts"
+	"github.com/bketelsen/gopilot/internal/web/templates/pages"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 )
@@ -99,6 +99,16 @@ func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleDashboardPage(w http.ResponseWriter, r *http.Request) {
-	component := layouts.Base("Dashboard")
+	running := s.state.AllRunning()
+	var retries []*domain.RetryEntry
+	if s.retries != nil {
+		retries = s.retries.All()
+	}
+	m := map[string]int64{}
+	if s.metrics != nil {
+		m = s.metrics.All()
+	}
+
+	component := pages.Dashboard(running, retries, m, s.cfg.Polling.MaxConcurrentAgents)
 	component.Render(r.Context(), w)
 }
