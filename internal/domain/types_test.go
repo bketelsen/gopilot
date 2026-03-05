@@ -145,6 +145,17 @@ Some other text.`
 	}
 }
 
+func TestCommentSorting(t *testing.T) {
+	comments := []Comment{
+		{ID: 2, Author: "user", Body: "second", CreatedAt: time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)},
+		{ID: 1, Author: "bot", Body: "first", CreatedAt: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)},
+	}
+	SortCommentsByTime(comments)
+	if comments[0].ID != 1 {
+		t.Errorf("first comment ID = %d, want 1", comments[0].ID)
+	}
+}
+
 func TestTokenCountsAdd(t *testing.T) {
 	a := TokenCounts{InputTokens: 100, OutputTokens: 50}
 	b := TokenCounts{InputTokens: 200, OutputTokens: 100}

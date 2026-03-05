@@ -123,6 +123,21 @@ func SortByPriority(issues []Issue) {
 	})
 }
 
+// Comment represents a GitHub issue comment.
+type Comment struct {
+	ID        int
+	Author    string
+	Body      string
+	CreatedAt time.Time
+}
+
+// SortCommentsByTime sorts comments by creation time (oldest first).
+func SortCommentsByTime(comments []Comment) {
+	sort.SliceStable(comments, func(i, j int) bool {
+		return comments[i].CreatedAt.Before(comments[j].CreatedAt)
+	})
+}
+
 // RunEntry tracks an active agent session.
 type RunEntry struct {
 	Issue       Issue
