@@ -606,5 +606,14 @@ func mapKeys(m map[string]string) []string {
 	return keys
 }
 
+// AddLabel adds a label to an issue.
+func (c *Client) AddLabel(ctx context.Context, owner, repo string, number int, label string) error {
+	_, _, err := c.rest.Issues.AddLabelsToIssue(ctx, owner, repo, number, []string{label})
+	if err != nil {
+		return fmt.Errorf("add label %q to %s/%s#%d: %w", label, owner, repo, number, err)
+	}
+	return nil
+}
+
 // Ensure time import is used
 var _ = time.Now

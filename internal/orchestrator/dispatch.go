@@ -11,15 +11,19 @@ import (
 	"github.com/bketelsen/gopilot/internal/workspace"
 )
 
+// OnComplete is called when an agent run finishes.
+type OnComplete func(issue github.Issue, err error)
+
 // Dispatcher handles the lifecycle of dispatching an agent to work on an issue.
 type Dispatcher struct {
-	gh        *github.Client
-	workspace *workspace.Manager
-	agent     agent.AgentRunner
-	state     *State
-	meta      *github.ProjectMeta
-	prompt    string
-	agentCfg  agentDispatchConfig
+	gh         *github.Client
+	workspace  *workspace.Manager
+	agent      agent.AgentRunner
+	state      *State
+	meta       *github.ProjectMeta
+	prompt     string
+	agentCfg   agentDispatchConfig
+	onComplete OnComplete
 }
 
 type agentDispatchConfig struct {
@@ -36,15 +40,17 @@ func NewDispatcher(
 	meta *github.ProjectMeta,
 	prompt string,
 	cfg agentDispatchConfig,
+	onComplete OnComplete,
 ) *Dispatcher {
 	return &Dispatcher{
-		gh:        ghClient,
-		workspace: ws,
-		agent:     runner,
-		state:     state,
-		meta:      meta,
-		prompt:    prompt,
-		agentCfg:  cfg,
+		gh:         ghClient,
+		workspace:  ws,
+		agent:      runner,
+		state:      state,
+		meta:       meta,
+		prompt:     prompt,
+		agentCfg:   cfg,
+		onComplete: onComplete,
 	}
 }
 
@@ -122,6 +128,15 @@ func (d *Dispatcher) Dispatch(ctx context.Context, issue github.Issue) error {
 	return nil
 }
 
+// StopRun terminates a running agent (e.g. for stall detection).
+func (d *Dispatcher) StopRun(entry *RunEntry) {
+	slog.Info("stopping stalled agent",
+		"issue", fmt.Sprintf("%s#%d", entry.Issue.Repo, entry.Issue.ID),
+		"session", entry.Session.ID,
+	)
+	entry.Session.Stop()
+}
+
 func (d *Dispatcher) waitForCompletion(issue github.Issue, session *agent.Session, log *slog.Logger) {
 	<-session.Done
 
@@ -149,6 +164,11 @@ func (d *Dispatcher) waitForCompletion(issue github.Issue, session *agent.Sessio
 	}
 
 	d.state.RemoveRunning(issue)
+
+	// Notify orchestrator of completion
+	if d.onComplete != nil {
+		d.onComplete(issue, session.Err)
+	}
 }
 
 func ownerRepo(repo string) (string, string) {

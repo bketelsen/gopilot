@@ -48,7 +48,7 @@ func main() {
 	}
 
 	// Create orchestrator
-	orch, err := orchestrator.New(cfg)
+	orch, err := orchestrator.New(cfg, *configPath)
 	if err != nil {
 		slog.Error("failed to create orchestrator", "error", err)
 		os.Exit(1)
