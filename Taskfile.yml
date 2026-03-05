@@ -8,15 +8,16 @@ tasks:
   generate:
     desc: Generate templ files
     cmds:
-      - templ generate
+      - go tool templ generate
 
   css:
     desc: Build Tailwind CSS
     cmds:
-      - npx @tailwindcss/cli -i internal/web/templates/input.css -o internal/web/static/styles.css --minify
+      - bin/tailwindcss -i internal/web/static/input.css -o internal/web/static/styles.css --minify
 
   build:
     desc: Build the gopilot binary
+    deps: [generate, css]
     cmds:
       - go build -ldflags "-X main.Version={{.VERSION}}" -o gopilot ./cmd/gopilot
 
