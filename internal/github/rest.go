@@ -192,6 +192,12 @@ func (c *RESTClient) SetProjectStatus(_ context.Context, _ domain.Issue, _ strin
 	return nil
 }
 
+// EnrichIssues is a no-op for the REST client.
+// Enrichment with Projects v2 fields requires the GraphQL API.
+func (c *RESTClient) EnrichIssues(_ context.Context, issues []domain.Issue) ([]domain.Issue, error) {
+	return issues, nil
+}
+
 // ghIssue is the raw GitHub API response shape.
 type ghIssue struct {
 	Number    int       `json:"number"`

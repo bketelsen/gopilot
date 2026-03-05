@@ -14,4 +14,5 @@ type Client interface {
 	SetProjectStatus(ctx context.Context, issue domain.Issue, status string) error
 	AddComment(ctx context.Context, repo string, id int, body string) error
 	AddLabel(ctx context.Context, repo string, id int, label string) error
+	EnrichIssues(ctx context.Context, issues []domain.Issue) ([]domain.Issue, error)
 }
