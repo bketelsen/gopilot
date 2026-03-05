@@ -24,7 +24,7 @@ import (
 type Orchestrator struct {
 	cfg        *config.Config
 	github     gh.Client
-	agent      agent.Runner
+	agents     map[string]agent.Runner
 	workspace  workspace.Manager
 	state        *State
 	retryQueue   *RetryQueue
@@ -38,11 +38,11 @@ type Orchestrator struct {
 }
 
 // NewOrchestrator creates a new orchestrator.
-func NewOrchestrator(cfg *config.Config, github gh.Client, agentRunner agent.Runner, configPath ...string) *Orchestrator {
+func NewOrchestrator(cfg *config.Config, github gh.Client, agents map[string]agent.Runner, configPath ...string) *Orchestrator {
 	o := &Orchestrator{
 		cfg:        cfg,
 		github:     github,
-		agent:      agentRunner,
+		agents:     agents,
 		workspace:    workspace.NewFSManager(cfg.Workspace),
 		state:        NewState(),
 		retryQueue:   NewRetryQueue(),
@@ -202,6 +202,27 @@ func (o *Orchestrator) Tick(ctx context.Context) {
 	}
 }
 
+func (o *Orchestrator) agentForIssue(issue domain.Issue) agent.Runner {
+	cmd := o.cfg.AgentCommandForIssue(issue.Repo, issue.Labels)
+	if runner, ok := o.agents[cmd]; ok {
+		return runner
+	}
+	if runner, ok := o.agents[o.cfg.Agent.Command]; ok {
+		return runner
+	}
+	for _, runner := range o.agents {
+		return runner
+	}
+	return nil
+}
+
+func (o *Orchestrator) stopSession(sess *agent.Session) {
+	for _, runner := range o.agents {
+		runner.Stop(sess)
+		return
+	}
+}
+
 func (o *Orchestrator) dispatch(ctx context.Context, issue domain.Issue, attempt int) {
 	if !o.state.Claim(issue.ID) {
 		return
@@ -234,11 +255,18 @@ func (o *Orchestrator) dispatch(ctx context.Context, issue domain.Issue, attempt
 		log.Warn("failed to set status to In Progress", "error", err)
 	}
 
+	runner := o.agentForIssue(issue)
+	if runner == nil {
+		log.Error("no agent runner available")
+		o.state.Release(issue.ID)
+		return
+	}
+
 	opts := agent.AgentOpts{
 		Model:            o.cfg.Agent.Model,
 		MaxContinuations: o.cfg.Agent.MaxAutopilotContinues,
 	}
-	sess, err := o.agent.Start(ctx, wsPath, rendered, opts)
+	sess, err := runner.Start(ctx, wsPath, rendered, opts)
 	if err != nil {
 		log.Error("agent start failed", "error", err)
 		o.state.Release(issue.ID)
@@ -310,7 +338,7 @@ func (o *Orchestrator) detectStalls(ctx context.Context) {
 
 			o.sessionsMu.Lock()
 			if sess, ok := o.sessions[entry.Issue.ID]; ok {
-				o.agent.Stop(sess)
+				o.stopSession(sess)
 				delete(o.sessions, entry.Issue.ID)
 			}
 			o.sessionsMu.Unlock()
@@ -361,7 +389,7 @@ func (o *Orchestrator) reconcile(ctx context.Context) {
 func (o *Orchestrator) stopAndCleanup(ctx context.Context, entry *domain.RunEntry, removeWorkspace bool) {
 	o.sessionsMu.Lock()
 	if sess, ok := o.sessions[entry.Issue.ID]; ok {
-		o.agent.Stop(sess)
+		o.stopSession(sess)
 		delete(o.sessions, entry.Issue.ID)
 	}
 	o.sessionsMu.Unlock()

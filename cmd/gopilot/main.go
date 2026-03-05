@@ -55,12 +55,30 @@ func main() {
 
 	restClient := ghclient.NewRESTClient(cfg.GitHub, "https://api.github.com/")
 
-	agentRunner := &agent.CopilotRunner{
-		Command: cfg.Agent.Command,
-		Token:   cfg.GitHub.Token,
+	runners := map[string]agent.Runner{
+		cfg.Agent.Command: &agent.CopilotRunner{
+			Command: cfg.Agent.Command,
+			Token:   cfg.GitHub.Token,
+		},
+	}
+	for _, override := range cfg.Agent.Overrides {
+		if _, exists := runners[override.Command]; !exists {
+			switch override.Command {
+			case "claude", "claude-code":
+				runners[override.Command] = &agent.ClaudeRunner{
+					Command: override.Command,
+					Token:   cfg.GitHub.Token,
+				}
+			default:
+				runners[override.Command] = &agent.CopilotRunner{
+					Command: override.Command,
+					Token:   cfg.GitHub.Token,
+				}
+			}
+		}
 	}
 
-	orch := orchestrator.NewOrchestrator(cfg, restClient, agentRunner, *configPath)
+	orch := orchestrator.NewOrchestrator(cfg, restClient, runners, *configPath)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
