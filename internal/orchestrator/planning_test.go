@@ -134,3 +134,60 @@ func TestOrchestratorPartitionsPlanningIssues(t *testing.T) {
 		t.Errorf("agents started = %d, want >= 2", ag.started)
 	}
 }
+
+func TestPlanningFullLifecycle(t *testing.T) {
+	cfg := &config.Config{
+		GitHub: config.GitHubConfig{
+			Token: "tok", Repos: []string{"o/r"}, EligibleLabels: []string{"gopilot"},
+		},
+		Polling: config.PollingConfig{IntervalMS: 1000, MaxConcurrentAgents: 5},
+		Agent: config.AgentConfig{
+			Command: "mock", TurnTimeoutMS: 60000, StallTimeoutMS: 60000,
+			MaxRetries: 3, MaxRetryBackoffMS: 1000, MaxAutopilotContinues: 5,
+		},
+		Workspace: config.WorkspaceConfig{Root: t.TempDir(), HookTimeoutMS: 5000},
+		Planning: config.PlanningConfig{
+			Label: "gopilot:plan", CompletedLabel: "gopilot:planned",
+			ApproveCommand: "/approve", MaxQuestions: 10, Agent: "mock",
+		},
+		Prompt: "Work",
+	}
+
+	planningIssue := domain.Issue{
+		ID: 1, Repo: "o/r", Title: "Plan: Auth system",
+		Labels: []string{"gopilot", "gopilot:plan"}, Status: "Todo",
+		Body: "We need auth", CreatedAt: time.Now(),
+	}
+	codingIssue := domain.Issue{
+		ID: 2, Repo: "o/r", Title: "Fix bug",
+		Labels: []string{"gopilot"}, Status: "Todo",
+		CreatedAt: time.Now(),
+	}
+
+	gh := &mockPlanningGitHub{
+		mockGitHub: mockGitHub{issues: []domain.Issue{planningIssue, codingIssue}},
+		comments:   map[int][]domain.Comment{},
+	}
+	ag := &mockAgent{}
+	orch := NewOrchestrator(cfg, gh, map[string]agent.Runner{"mock": ag})
+
+	ctx := context.Background()
+	orch.Tick(ctx)
+
+	if !orch.state.IsPlanning(1) {
+		t.Fatal("issue 1 should be in planning state after tick 1")
+	}
+
+	time.Sleep(100 * time.Millisecond)
+
+	entry := orch.state.GetPlanning(1)
+	if entry == nil {
+		t.Fatal("planning entry is nil")
+	}
+	if entry.Phase != PlanningPhaseAwaitingReply {
+		t.Errorf("phase = %q, want %q", entry.Phase, PlanningPhaseAwaitingReply)
+	}
+	if entry.QuestionsAsked != 1 {
+		t.Errorf("questions asked = %d, want 1", entry.QuestionsAsked)
+	}
+}
