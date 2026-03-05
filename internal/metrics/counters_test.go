@@ -1,6 +1,9 @@
 package metrics
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func TestCounters(t *testing.T) {
 	c := NewCounters()
@@ -22,5 +25,26 @@ func TestCounters(t *testing.T) {
 	all := c.All()
 	if len(all) != 2 {
 		t.Errorf("All() len = %d, want 2", len(all))
+	}
+}
+
+func TestDurationStats(t *testing.T) {
+	c := NewCounters()
+	c.RecordDuration("session_duration", 30*time.Second)
+	c.RecordDuration("session_duration", 60*time.Second)
+	c.RecordDuration("session_duration", 90*time.Second)
+
+	stats := c.DurationStats("session_duration")
+	if stats.Count != 3 {
+		t.Errorf("count = %d, want 3", stats.Count)
+	}
+	if stats.Min != 30*time.Second {
+		t.Errorf("min = %v, want 30s", stats.Min)
+	}
+	if stats.Max != 90*time.Second {
+		t.Errorf("max = %v, want 90s", stats.Max)
+	}
+	if stats.Avg < 59*time.Second || stats.Avg > 61*time.Second {
+		t.Errorf("avg = %v, want ~60s", stats.Avg)
 	}
 }
