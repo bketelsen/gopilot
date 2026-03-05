@@ -54,6 +54,15 @@ dashboard:
   enabled: true
   addr: ":3000"
 
+# Planning configuration (optional)
+# planning:
+#   label: "gopilot:plan"           # Label that triggers planning mode
+#   completed_label: "gopilot:planned"  # Label applied when planning completes
+#   approve_command: "/approve"      # Comment text that triggers issue creation
+#   max_questions: 10                # Max questions before forcing plan proposal
+#   agent: "claude-code"             # Agent runner for planning (optional)
+#   model: "claude-sonnet-4-6"      # Model override for planning (optional)
+
 prompt: |
   You are an AI software engineer working on a GitHub issue.
 
