@@ -39,6 +39,9 @@ func (m *mockGitHub) AddComment(ctx context.Context, repo string, id int, body s
 func (m *mockGitHub) AddLabel(ctx context.Context, repo string, id int, label string) error {
 	return nil
 }
+func (m *mockGitHub) EnrichIssues(ctx context.Context, issues []domain.Issue) ([]domain.Issue, error) {
+	return issues, nil
+}
 
 // mockAgent implements agent.Runner for testing.
 type mockAgent struct {
@@ -268,6 +271,9 @@ func (m *mockGitHubSplit) AddComment(ctx context.Context, repo string, id int, b
 func (m *mockGitHubSplit) AddLabel(ctx context.Context, repo string, id int, label string) error {
 	return nil
 }
+func (m *mockGitHubSplit) EnrichIssues(ctx context.Context, issues []domain.Issue) ([]domain.Issue, error) {
+	return issues, nil
+}
 
 func TestRetrySkipsIneligibleIssue(t *testing.T) {
 	cfg := &config.Config{
@@ -340,6 +346,43 @@ func TestReconcileTerminalIssue(t *testing.T) {
 
 	if orch.state.RunningCount() != 0 {
 		t.Errorf("running = %d, want 0 after reconciling terminal issue", orch.state.RunningCount())
+	}
+}
+
+func TestBlockedIssueNotDispatched(t *testing.T) {
+	cfg := &config.Config{
+		GitHub: config.GitHubConfig{
+			Token: "tok", Repos: []string{"o/r"}, EligibleLabels: []string{"gopilot"},
+		},
+		Polling: config.PollingConfig{IntervalMS: 1000, MaxConcurrentAgents: 5},
+		Agent: config.AgentConfig{
+			Command: "mock", TurnTimeoutMS: 60000, StallTimeoutMS: 60000,
+			MaxRetries: 3, MaxRetryBackoffMS: 1000, MaxAutopilotContinues: 5,
+		},
+		Workspace: config.WorkspaceConfig{Root: t.TempDir(), HookTimeoutMS: 5000},
+		Prompt:    "Work on {{ .Issue.Title }}",
+	}
+
+	gh := &mockGitHub{
+		issues: []domain.Issue{
+			{ID: 1, Repo: "o/r", Title: "Blocked task", Body: "blocked by #2", BlockedBy: []int{2}, Labels: []string{"gopilot"}, Status: "Todo", Priority: 1, CreatedAt: time.Now()},
+			{ID: 3, Repo: "o/r", Title: "Normal task", Labels: []string{"gopilot"}, Status: "Todo", Priority: 2, CreatedAt: time.Now()},
+		},
+	}
+	ag := &mockAgent{}
+	orch := NewOrchestrator(cfg, gh, map[string]agent.Runner{"mock": ag})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	orch.Tick(ctx)
+
+	// Only issue 3 should be dispatched; issue 1 is blocked because #2 is not resolved
+	if ag.started != 1 {
+		t.Errorf("started = %d, want 1 (only unblocked issue)", ag.started)
+	}
+	if orch.state.RunningCount() != 1 {
+		t.Errorf("running = %d, want 1", orch.state.RunningCount())
 	}
 }
 

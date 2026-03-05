@@ -184,9 +184,28 @@ func (o *Orchestrator) Tick(ctx context.Context) {
 		return
 	}
 
+	// Parse BlockedBy from body text
+	for i := range issues {
+		if len(issues[i].BlockedBy) == 0 {
+			issues[i].BlockedBy = domain.ParseBlockedBy(issues[i].Body)
+		}
+	}
+
+	// Build resolved map for blocking check
+	resolved := make(map[int]bool)
+	for _, issue := range issues {
+		if issue.IsTerminal() {
+			resolved[issue.ID] = true
+		}
+	}
+
 	var candidates []domain.Issue
 	for _, issue := range issues {
 		if o.state.IsClaimed(issue.ID) || o.state.GetRunning(issue.ID) != nil || o.state.IsInRetryQueue(issue.ID) || o.retryQueue.Has(issue.ID) {
+			continue
+		}
+		if issue.IsBlocked(resolved) {
+			slog.Debug("skipping blocked issue", "issue", issue.Identifier(), "blocked_by", issue.BlockedBy)
 			continue
 		}
 		candidates = append(candidates, issue)
