@@ -1,0 +1,71 @@
+package pages
+
+import (
+	"fmt"
+	"github.com/bketelsen/gopilot/internal/domain"
+	"github.com/bketelsen/gopilot/internal/web/templates/layouts"
+)
+
+type SprintData struct {
+	Iteration string
+	ByStatus  map[string][]domain.Issue
+	Total     int
+	Done      int
+}
+
+templ Sprint(data SprintData) {
+	@layouts.Base("Sprint") {
+		<div class="space-y-6">
+			<h1 class="text-2xl font-bold">
+				if data.Iteration != "" {
+					Sprint: { data.Iteration }
+				} else {
+					Current Sprint
+				}
+			</h1>
+
+			<div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
+				<div class="flex justify-between text-sm mb-2">
+					<span>Progress</span>
+					<span>{ fmt.Sprintf("%d / %d", data.Done, data.Total) }</span>
+				</div>
+				<div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3">
+					if data.Total > 0 {
+						<div class="bg-green-500 h-3 rounded-full" style={ fmt.Sprintf("width: %d%%", data.Done*100/data.Total) }></div>
+					}
+				</div>
+			</div>
+
+			for _, status := range sprintStatuses() {
+				<div class="bg-white dark:bg-gray-800 rounded-lg shadow">
+					<div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex justify-between">
+						<h2 class="text-lg font-semibold">{ status }</h2>
+						<span class="text-gray-500">{ fmt.Sprintf("%d", len(data.ByStatus[status])) }</span>
+					</div>
+					<ul class="divide-y divide-gray-200 dark:divide-gray-700">
+						if len(data.ByStatus[status]) == 0 {
+							<li class="px-4 py-3 text-gray-500 text-sm">No issues</li>
+						}
+						for _, issue := range data.ByStatus[status] {
+							<li class="px-4 py-3 flex justify-between items-center">
+								<div>
+									<a href={ templ.SafeURL(fmt.Sprintf("/issues/%s/%d", issue.Repo, issue.ID)) } class="text-blue-500 hover:underline">
+										{ issue.Identifier() }
+									</a>
+									<span class="ml-2 text-sm">{ issue.Title }</span>
+								</div>
+								if issue.Priority > 0 {
+									<span class="text-xs text-gray-500">P{ fmt.Sprintf("%d", issue.Priority) }</span>
+								}
+							</li>
+						}
+					</ul>
+				</div>
+			}
+		</div>
+	}
+}
+
+func sprintStatuses() []string {
+	return []string{"Todo", "In Progress", "In Review", "Done"}
+}
