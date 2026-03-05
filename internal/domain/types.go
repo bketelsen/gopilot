@@ -93,3 +93,68 @@ func SortByPriority(issues []Issue) {
 		return issues[i].CreatedAt.Before(issues[j].CreatedAt)
 	})
 }
+
+// RunEntry tracks an active agent session.
+type RunEntry struct {
+	Issue       Issue
+	SessionID   string
+	ProcessPID  int
+	StartedAt   time.Time
+	LastEventAt time.Time
+	LastEvent   string
+	LastMessage string
+	TurnCount   int
+	Attempt     int
+	Tokens      TokenCounts
+}
+
+// Duration returns time since the agent started.
+func (r RunEntry) Duration() time.Duration {
+	return time.Since(r.StartedAt)
+}
+
+// IsStalled returns true if no events received within the timeout.
+func (r RunEntry) IsStalled(timeout time.Duration) bool {
+	return time.Since(r.LastEventAt) > timeout
+}
+
+// RetryEntry tracks an issue waiting for retry.
+type RetryEntry struct {
+	IssueID    int
+	Identifier string // "owner/repo#42"
+	Attempt    int
+	DueAt      time.Time
+	Error      string
+}
+
+// TokenCounts tracks token usage for a session.
+type TokenCounts struct {
+	InputTokens  int64
+	OutputTokens int64
+	TotalTokens  int64
+}
+
+// Add returns the sum of two TokenCounts.
+func (t TokenCounts) Add(other TokenCounts) TokenCounts {
+	return TokenCounts{
+		InputTokens:  t.InputTokens + other.InputTokens,
+		OutputTokens: t.OutputTokens + other.OutputTokens,
+		TotalTokens:  t.InputTokens + other.InputTokens + t.OutputTokens + other.OutputTokens,
+	}
+}
+
+// TokenTotals extends TokenCounts with aggregate metrics.
+type TokenTotals struct {
+	TokenCounts
+	SecondsRunning float64
+	CostEstimate   float64 // estimated USD
+}
+
+// AgentEvent represents an event from a running agent.
+type AgentEvent struct {
+	Type      string // agent_started, agent_output, agent_completed, agent_failed, agent_timeout
+	SessionID string
+	IssueID   int
+	Message   string
+	Timestamp time.Time
+}

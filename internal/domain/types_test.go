@@ -87,3 +87,35 @@ func TestPrioritySort(t *testing.T) {
 		}
 	}
 }
+
+func TestRunEntryDuration(t *testing.T) {
+	entry := RunEntry{
+		StartedAt: time.Now().Add(-5 * time.Minute),
+	}
+	d := entry.Duration()
+	if d < 4*time.Minute || d > 6*time.Minute {
+		t.Errorf("Duration() = %v, want ~5m", d)
+	}
+}
+
+func TestRunEntryIsStalled(t *testing.T) {
+	timeout := 5 * time.Minute
+	fresh := RunEntry{LastEventAt: time.Now()}
+	if fresh.IsStalled(timeout) {
+		t.Error("fresh entry should not be stalled")
+	}
+
+	stale := RunEntry{LastEventAt: time.Now().Add(-10 * time.Minute)}
+	if !stale.IsStalled(timeout) {
+		t.Error("stale entry should be stalled")
+	}
+}
+
+func TestTokenCountsAdd(t *testing.T) {
+	a := TokenCounts{InputTokens: 100, OutputTokens: 50}
+	b := TokenCounts{InputTokens: 200, OutputTokens: 100}
+	sum := a.Add(b)
+	if sum.InputTokens != 300 || sum.OutputTokens != 150 || sum.TotalTokens != 450 {
+		t.Errorf("Add() = %+v, want {300, 150, 450}", sum)
+	}
+}
