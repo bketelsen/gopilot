@@ -85,6 +85,7 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 			o.cfg.Agent.MaxRetries = newCfg.Agent.MaxRetries
 			o.cfg.Agent.MaxRetryBackoffMS = newCfg.Agent.MaxRetryBackoffMS
 			o.cfg.Agent.MaxAutopilotContinues = newCfg.Agent.MaxAutopilotContinues
+			o.cfg.Planning = newCfg.Planning
 			o.cfg.Skills = newCfg.Skills
 			o.cfg.Prompt = newCfg.Prompt
 		})
