@@ -2,6 +2,7 @@ package orchestrator
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -155,5 +156,122 @@ func TestOrchestratorRespectsMaxConcurrency(t *testing.T) {
 
 	if ag.started != 1 {
 		t.Errorf("started = %d, want 1 (max concurrency)", ag.started)
+	}
+}
+
+type mockFailAgent struct{}
+
+func (m *mockFailAgent) Name() string { return "mock-fail" }
+func (m *mockFailAgent) Start(ctx context.Context, workspace string, prompt string, opts agent.AgentOpts) (*agent.Session, error) {
+	done := make(chan struct{})
+	close(done)
+	return &agent.Session{
+		ID: "fail-session", PID: 99999, Done: done,
+		ExitCode: 1, ExitErr: fmt.Errorf("crashed"),
+		Cancel: func() {},
+	}, nil
+}
+func (m *mockFailAgent) Stop(sess *agent.Session) error { return nil }
+
+func TestOrchestratorRetryOnAgentFailure(t *testing.T) {
+	cfg := &config.Config{
+		GitHub: config.GitHubConfig{
+			Token: "tok", Repos: []string{"o/r"}, EligibleLabels: []string{"gopilot"},
+		},
+		Polling: config.PollingConfig{IntervalMS: 1000, MaxConcurrentAgents: 3},
+		Agent: config.AgentConfig{
+			Command: "mock", TurnTimeoutMS: 60000, StallTimeoutMS: 60000,
+			MaxRetries: 3, MaxRetryBackoffMS: 1000, MaxAutopilotContinues: 5,
+		},
+		Workspace: config.WorkspaceConfig{Root: t.TempDir(), HookTimeoutMS: 5000},
+		Prompt:    "Work",
+	}
+
+	gh := &mockGitHub{
+		issues: []domain.Issue{
+			{ID: 1, Repo: "o/r", Labels: []string{"gopilot"}, Status: "Todo", Priority: 1},
+		},
+	}
+
+	failAgent := &mockFailAgent{}
+	orch := NewOrchestrator(cfg, gh, failAgent)
+
+	ctx := context.Background()
+	orch.Tick(ctx)
+
+	time.Sleep(100 * time.Millisecond)
+
+	if orch.retryQueue.Len() != 1 {
+		t.Errorf("retry queue len = %d, want 1", orch.retryQueue.Len())
+	}
+}
+
+func TestOrchestratorStallDetection(t *testing.T) {
+	cfg := &config.Config{
+		GitHub: config.GitHubConfig{
+			Token: "tok", Repos: []string{"o/r"}, EligibleLabels: []string{"gopilot"},
+		},
+		Polling: config.PollingConfig{IntervalMS: 1000, MaxConcurrentAgents: 3},
+		Agent: config.AgentConfig{
+			Command: "mock", TurnTimeoutMS: 60000,
+			StallTimeoutMS: 1, // 1ms — everything is stalled immediately
+			MaxRetries: 3, MaxRetryBackoffMS: 1000, MaxAutopilotContinues: 5,
+		},
+		Workspace: config.WorkspaceConfig{Root: t.TempDir(), HookTimeoutMS: 5000},
+		Prompt:    "Work",
+	}
+
+	gh := &mockGitHub{
+		issues: []domain.Issue{
+			{ID: 1, Repo: "o/r", Labels: []string{"gopilot"}, Status: "Todo", Priority: 1},
+		},
+	}
+	ag := &mockAgent{}
+	orch := NewOrchestrator(cfg, gh, ag)
+
+	ctx := context.Background()
+	orch.Tick(ctx) // dispatch
+
+	time.Sleep(50 * time.Millisecond) // let it become "stalled"
+
+	orch.detectStalls(ctx)
+
+	if orch.state.RunningCount() != 0 {
+		t.Errorf("running = %d, want 0 after stall detection", orch.state.RunningCount())
+	}
+}
+
+func TestReconcileTerminalIssue(t *testing.T) {
+	cfg := &config.Config{
+		GitHub: config.GitHubConfig{
+			Token: "tok", Repos: []string{"o/r"}, EligibleLabels: []string{"gopilot"},
+		},
+		Polling: config.PollingConfig{IntervalMS: 1000, MaxConcurrentAgents: 3},
+		Agent: config.AgentConfig{
+			Command: "mock", TurnTimeoutMS: 60000, StallTimeoutMS: 60000,
+			MaxRetries: 3, MaxRetryBackoffMS: 1000, MaxAutopilotContinues: 5,
+		},
+		Workspace: config.WorkspaceConfig{Root: t.TempDir(), HookTimeoutMS: 5000},
+		Prompt:    "Work",
+	}
+
+	gh := &mockGitHub{
+		issues: []domain.Issue{
+			{ID: 1, Repo: "o/r", Labels: []string{"gopilot"}, Status: "Todo", Priority: 1},
+		},
+	}
+	ag := &mockAgent{}
+	orch := NewOrchestrator(cfg, gh, ag)
+
+	ctx := context.Background()
+	orch.Tick(ctx) // dispatch issue 1
+
+	// Simulate external state change: issue moved to Done
+	gh.issues[0].Status = "Done"
+
+	orch.reconcile(ctx)
+
+	if orch.state.RunningCount() != 0 {
+		t.Errorf("running = %d, want 0 after reconciling terminal issue", orch.state.RunningCount())
 	}
 }

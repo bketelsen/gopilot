@@ -2,7 +2,9 @@ package orchestrator
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
+	"strconv"
 	"time"
 
 	"github.com/bketelsen/gopilot/internal/agent"
@@ -15,21 +17,25 @@ import (
 
 // Orchestrator runs the poll-dispatch-reconcile loop.
 type Orchestrator struct {
-	cfg       *config.Config
-	github    gh.Client
-	agent     agent.Runner
-	workspace workspace.Manager
-	state     *State
+	cfg        *config.Config
+	github     gh.Client
+	agent      agent.Runner
+	workspace  workspace.Manager
+	state      *State
+	retryQueue *RetryQueue
+	sessions   map[int]*agent.Session
 }
 
 // NewOrchestrator creates a new orchestrator.
 func NewOrchestrator(cfg *config.Config, github gh.Client, agentRunner agent.Runner) *Orchestrator {
 	return &Orchestrator{
-		cfg:       cfg,
-		github:    github,
-		agent:     agentRunner,
-		workspace: workspace.NewFSManager(cfg.Workspace),
-		state:     NewState(),
+		cfg:        cfg,
+		github:     github,
+		agent:      agentRunner,
+		workspace:  workspace.NewFSManager(cfg.Workspace),
+		state:      NewState(),
+		retryQueue: NewRetryQueue(),
+		sessions:   make(map[int]*agent.Session),
 	}
 }
 
@@ -79,6 +85,28 @@ func (o *Orchestrator) DryRun(ctx context.Context) error {
 
 // Tick runs one iteration of the poll-dispatch-reconcile loop.
 func (o *Orchestrator) Tick(ctx context.Context) {
+	o.reconcile(ctx)
+	o.detectStalls(ctx)
+
+	// Process due retries before dispatching new candidates.
+	for _, retry := range o.retryQueue.DueEntries() {
+		if !o.state.SlotsAvailable(o.cfg.Polling.MaxConcurrentAgents) {
+			// Re-enqueue if no slots available.
+			maxBackoff := time.Duration(o.cfg.Agent.MaxRetryBackoffMS) * time.Millisecond
+			o.retryQueue.Enqueue(retry.IssueID, retry.Identifier, retry.Attempt, retry.Error, maxBackoff)
+			continue
+		}
+		slog.Info("retrying issue", "issue", retry.Identifier, "attempt", retry.Attempt)
+		// Fetch fresh issue state for retry.
+		issue, err := o.github.FetchIssueState(ctx, "", retry.IssueID)
+		if err != nil || issue == nil {
+			slog.Warn("retry: could not fetch issue state", "issue_id", retry.IssueID, "error", err)
+			continue
+		}
+		o.state.Release(issue.ID) // Release claim so dispatch can re-claim
+		o.dispatch(ctx, *issue, retry.Attempt)
+	}
+
 	issues, err := o.github.FetchCandidateIssues(ctx)
 	if err != nil {
 		slog.Error("failed to fetch candidates", "error", err)
@@ -87,7 +115,7 @@ func (o *Orchestrator) Tick(ctx context.Context) {
 
 	var candidates []domain.Issue
 	for _, issue := range issues {
-		if o.state.IsClaimed(issue.ID) || o.state.GetRunning(issue.ID) != nil || o.state.IsInRetryQueue(issue.ID) {
+		if o.state.IsClaimed(issue.ID) || o.state.GetRunning(issue.ID) != nil || o.state.IsInRetryQueue(issue.ID) || o.retryQueue.Has(issue.ID) {
 			continue
 		}
 		candidates = append(candidates, issue)
@@ -145,6 +173,8 @@ func (o *Orchestrator) dispatch(ctx context.Context, issue domain.Issue, attempt
 		return
 	}
 
+	o.sessions[issue.ID] = sess
+
 	now := time.Now()
 	entry := &domain.RunEntry{
 		Issue:       issue,
@@ -171,14 +201,108 @@ func (o *Orchestrator) monitorAgent(issue domain.Issue, sess *agent.Session, ent
 	log := slog.With("issue", issue.Identifier(), "session_id", sess.ID)
 
 	o.state.RemoveRunning(issue.ID)
+	delete(o.sessions, issue.ID)
 
 	if sess.ExitCode == 0 {
 		log.Info("agent completed successfully")
 		o.state.Release(issue.ID)
 	} else {
 		log.Warn("agent exited with error", "exit_code", sess.ExitCode, "error", sess.ExitErr)
-		o.state.Release(issue.ID)
+
+		errMsg := "exit code " + strconv.Itoa(sess.ExitCode)
+		if sess.ExitErr != nil {
+			errMsg = sess.ExitErr.Error()
+		}
+		if entry.Attempt < o.cfg.Agent.MaxRetries {
+			maxBackoff := time.Duration(o.cfg.Agent.MaxRetryBackoffMS) * time.Millisecond
+			o.retryQueue.Enqueue(issue.ID, issue.Identifier(), entry.Attempt+1, errMsg, maxBackoff)
+			log.Info("scheduled retry", "next_attempt", entry.Attempt+1)
+		} else {
+			o.handleMaxRetriesExceeded(issue, errMsg)
+		}
 	}
+}
+
+func (o *Orchestrator) detectStalls(ctx context.Context) {
+	timeout := o.cfg.StallTimeout()
+	for _, entry := range o.state.AllRunning() {
+		if entry.IsStalled(timeout) {
+			log := slog.With("issue", entry.Issue.Identifier(), "session_id", entry.SessionID)
+			log.Warn("agent stalled, killing", "last_event", entry.LastEventAt)
+
+			if sess, ok := o.sessions[entry.Issue.ID]; ok {
+				o.agent.Stop(sess)
+				delete(o.sessions, entry.Issue.ID)
+			}
+
+			o.state.RemoveRunning(entry.Issue.ID)
+
+			duration := time.Since(entry.StartedAt).Round(time.Second)
+			comment := fmt.Sprintf("Agent stalled after %s, retrying (attempt %d)", duration, entry.Attempt)
+			o.github.AddComment(ctx, entry.Issue.Repo, entry.Issue.ID, comment)
+
+			if entry.Attempt < o.cfg.Agent.MaxRetries {
+				maxBackoff := time.Duration(o.cfg.Agent.MaxRetryBackoffMS) * time.Millisecond
+				o.retryQueue.Enqueue(entry.Issue.ID, entry.Issue.Identifier(), entry.Attempt+1, "stalled", maxBackoff)
+			} else {
+				o.handleMaxRetriesExceeded(entry.Issue, "stalled")
+			}
+		}
+	}
+}
+
+func (o *Orchestrator) reconcile(ctx context.Context) {
+	for _, entry := range o.state.AllRunning() {
+		issue, err := o.github.FetchIssueState(ctx, entry.Issue.Repo, entry.Issue.ID)
+		if err != nil {
+			slog.Warn("reconcile: fetch failed", "issue", entry.Issue.Identifier(), "error", err)
+			continue
+		}
+		if issue == nil {
+			continue
+		}
+
+		if issue.IsTerminal() {
+			slog.Info("reconcile: issue became terminal, stopping agent", "issue", entry.Issue.Identifier(), "status", issue.Status)
+			o.stopAndCleanup(ctx, entry, true)
+			continue
+		}
+
+		if !issue.IsEligible(o.cfg.GitHub.EligibleLabels, o.cfg.GitHub.ExcludedLabels) {
+			slog.Info("reconcile: issue no longer eligible, stopping agent", "issue", entry.Issue.Identifier())
+			o.stopAndCleanup(ctx, entry, false)
+			continue
+		}
+
+		entry.Issue = *issue
+	}
+}
+
+func (o *Orchestrator) stopAndCleanup(ctx context.Context, entry *domain.RunEntry, removeWorkspace bool) {
+	if sess, ok := o.sessions[entry.Issue.ID]; ok {
+		o.agent.Stop(sess)
+		delete(o.sessions, entry.Issue.ID)
+	}
+
+	o.state.RemoveRunning(entry.Issue.ID)
+	o.state.Release(entry.Issue.ID)
+
+	o.workspace.RunHook(ctx, "after_run", o.workspace.Path(entry.Issue), entry.Issue)
+
+	if removeWorkspace {
+		o.workspace.Cleanup(ctx, entry.Issue)
+	}
+}
+
+func (o *Orchestrator) handleMaxRetriesExceeded(issue domain.Issue, lastError string) {
+	log := slog.With("issue", issue.Identifier())
+	log.Error("max retries exceeded", "attempts", o.cfg.Agent.MaxRetries, "last_error", lastError)
+
+	o.state.Release(issue.ID)
+
+	comment := fmt.Sprintf("Gopilot failed after %d attempts. Last error: %s", o.cfg.Agent.MaxRetries, lastError)
+	o.github.AddComment(context.Background(), issue.Repo, issue.ID, comment)
+	o.github.AddLabel(context.Background(), issue.Repo, issue.ID, "gopilot-failed")
 }
 
 func (o *Orchestrator) shutdown() {
