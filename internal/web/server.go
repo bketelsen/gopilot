@@ -3,6 +3,7 @@ package web
 import (
 	"encoding/json"
 	"net/http"
+	"os/exec"
 	"strconv"
 
 	"github.com/bketelsen/gopilot/internal/config"
@@ -32,12 +33,13 @@ type RetryProvider interface {
 }
 
 type Server struct {
-	router  chi.Router
-	state   StateProvider
-	cfg     *config.Config
-	sseHub  *SSEHub
-	metrics MetricsProvider
-	retries RetryProvider
+	router         chi.Router
+	state          StateProvider
+	cfg            *config.Config
+	sseHub         *SSEHub
+	metrics        MetricsProvider
+	retries        RetryProvider
+	triggerRefresh func()
 }
 
 func NewServer(state StateProvider, cfg *config.Config, metrics MetricsProvider, retries RetryProvider) *Server {
@@ -64,12 +66,14 @@ func (s *Server) buildRouter() chi.Router {
 		r.Get("/events", s.sseHub.HandleSSE)
 		r.Get("/issues/{owner}/{repo}/{id}", s.handleIssueDetailAPI)
 		r.Get("/sprint", s.handleSprintAPI)
+		r.Post("/refresh", s.handleRefresh)
 	})
 
 	r.Handle("/static/*", http.StripPrefix("/static/", http.FileServer(http.Dir("internal/web/static"))))
 	r.Get("/", s.handleDashboardPage)
 	r.Get("/issues/{owner}/{repo}/{id}", s.handleIssueDetail)
 	r.Get("/sprint", s.handleSprintPage)
+	r.Get("/settings", s.handleSettingsPage)
 
 	return r
 }
@@ -190,4 +194,38 @@ func (s *Server) handleSprintAPI(w http.ResponseWriter, r *http.Request) {
 		"running_count": len(running),
 		"running":       running,
 	})
+}
+
+func (s *Server) handleSettingsPage(w http.ResponseWriter, r *http.Request) {
+	agentValid := map[string]bool{}
+	agentValid[s.cfg.Agent.Command] = isCommandAvailable(s.cfg.Agent.Command)
+	for _, override := range s.cfg.Agent.Overrides {
+		agentValid[override.Command] = isCommandAvailable(override.Command)
+	}
+
+	data := pages.SettingsData{
+		Config:     s.cfg,
+		Skills:     nil, // TODO: wire skills provider
+		AgentValid: agentValid,
+	}
+	component := pages.Settings(data)
+	component.Render(r.Context(), w)
+}
+
+func isCommandAvailable(name string) bool {
+	_, err := exec.LookPath(name)
+	return err == nil
+}
+
+// SetRefreshFunc sets the callback invoked by POST /api/v1/refresh.
+func (s *Server) SetRefreshFunc(fn func()) {
+	s.triggerRefresh = fn
+}
+
+func (s *Server) handleRefresh(w http.ResponseWriter, r *http.Request) {
+	if s.triggerRefresh != nil {
+		s.triggerRefresh()
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "triggered"})
 }
