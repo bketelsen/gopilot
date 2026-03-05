@@ -5,6 +5,16 @@ vars:
     sh: git describe --tags --always --dirty 2>/dev/null || echo "dev"
 
 tasks:
+  generate:
+    desc: Generate templ files
+    cmds:
+      - templ generate
+
+  css:
+    desc: Build Tailwind CSS
+    cmds:
+      - npx @tailwindcss/cli -i internal/web/templates/input.css -o internal/web/static/styles.css --minify
+
   build:
     desc: Build the gopilot binary
     cmds:
@@ -27,6 +37,6 @@ tasks:
 
   dev:
     desc: Build and run
+    deps: [build]
     cmds:
-      - task: build
       - ./gopilot {{.CLI_ARGS}}
