@@ -6,12 +6,14 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/bketelsen/gopilot/internal/agent"
 	"github.com/bketelsen/gopilot/internal/config"
 	"github.com/bketelsen/gopilot/internal/domain"
 	gh "github.com/bketelsen/gopilot/internal/github"
+	"github.com/bketelsen/gopilot/internal/metrics"
 	"github.com/bketelsen/gopilot/internal/prompt"
 	"github.com/bketelsen/gopilot/internal/skills"
 	"github.com/bketelsen/gopilot/internal/web"
@@ -24,12 +26,15 @@ type Orchestrator struct {
 	github     gh.Client
 	agent      agent.Runner
 	workspace  workspace.Manager
-	state      *State
-	retryQueue *RetryQueue
-	sessions   map[int]*agent.Session
-	configPath string
-	skills     []*skills.Skill
-	sseHub     *web.SSEHub
+	state        *State
+	retryQueue   *RetryQueue
+	sessionsMu   sync.Mutex
+	sessions     map[int]*agent.Session
+	configPath   string
+	skills       []*skills.Skill
+	sseHub       *web.SSEHub
+	metrics      *metrics.Counters
+	tokenTracker *metrics.TokenTracker
 }
 
 // NewOrchestrator creates a new orchestrator.
@@ -38,10 +43,12 @@ func NewOrchestrator(cfg *config.Config, github gh.Client, agentRunner agent.Run
 		cfg:        cfg,
 		github:     github,
 		agent:      agentRunner,
-		workspace:  workspace.NewFSManager(cfg.Workspace),
-		state:      NewState(),
-		retryQueue: NewRetryQueue(),
-		sessions:   make(map[int]*agent.Session),
+		workspace:    workspace.NewFSManager(cfg.Workspace),
+		state:        NewState(),
+		retryQueue:   NewRetryQueue(),
+		sessions:     make(map[int]*agent.Session),
+		metrics:      metrics.NewCounters(),
+		tokenTracker: metrics.NewTokenTracker(),
 	}
 	if len(configPath) > 0 {
 		o.configPath = configPath[0]
@@ -89,7 +96,7 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 	}
 
 	if o.cfg.Dashboard.Enabled {
-		webSrv := web.NewServer(o.state, o.cfg)
+		webSrv := web.NewServer(o.state, o.cfg, o.metrics)
 		o.sseHub = webSrv.SSEHub()
 		go func() {
 			slog.Info("dashboard starting", "addr", o.cfg.Dashboard.Addr)
@@ -233,7 +240,10 @@ func (o *Orchestrator) dispatch(ctx context.Context, issue domain.Issue, attempt
 		return
 	}
 
+	o.sessionsMu.Lock()
 	o.sessions[issue.ID] = sess
+	o.sessionsMu.Unlock()
+	o.metrics.Increment("issues_dispatched")
 
 	now := time.Now()
 	entry := &domain.RunEntry{
@@ -261,10 +271,13 @@ func (o *Orchestrator) monitorAgent(issue domain.Issue, sess *agent.Session, ent
 	log := slog.With("issue", issue.Identifier(), "session_id", sess.ID)
 
 	o.state.RemoveRunning(issue.ID)
+	o.sessionsMu.Lock()
 	delete(o.sessions, issue.ID)
+	o.sessionsMu.Unlock()
 
 	if sess.ExitCode == 0 {
 		log.Info("agent completed successfully")
+		o.metrics.Increment("issues_completed")
 		o.state.Release(issue.ID)
 	} else {
 		log.Warn("agent exited with error", "exit_code", sess.ExitCode, "error", sess.ExitErr)
@@ -290,10 +303,12 @@ func (o *Orchestrator) detectStalls(ctx context.Context) {
 			log := slog.With("issue", entry.Issue.Identifier(), "session_id", entry.SessionID)
 			log.Warn("agent stalled, killing", "last_event", entry.LastEventAt)
 
+			o.sessionsMu.Lock()
 			if sess, ok := o.sessions[entry.Issue.ID]; ok {
 				o.agent.Stop(sess)
 				delete(o.sessions, entry.Issue.ID)
 			}
+			o.sessionsMu.Unlock()
 
 			o.state.RemoveRunning(entry.Issue.ID)
 
@@ -339,10 +354,12 @@ func (o *Orchestrator) reconcile(ctx context.Context) {
 }
 
 func (o *Orchestrator) stopAndCleanup(ctx context.Context, entry *domain.RunEntry, removeWorkspace bool) {
+	o.sessionsMu.Lock()
 	if sess, ok := o.sessions[entry.Issue.ID]; ok {
 		o.agent.Stop(sess)
 		delete(o.sessions, entry.Issue.ID)
 	}
+	o.sessionsMu.Unlock()
 
 	o.state.RemoveRunning(entry.Issue.ID)
 	o.state.Release(entry.Issue.ID)
@@ -358,6 +375,7 @@ func (o *Orchestrator) handleMaxRetriesExceeded(issue domain.Issue, lastError st
 	log := slog.With("issue", issue.Identifier())
 	log.Error("max retries exceeded", "attempts", o.cfg.Agent.MaxRetries, "last_error", lastError)
 
+	o.metrics.Increment("issues_failed")
 	o.state.Release(issue.ID)
 
 	comment := fmt.Sprintf("Gopilot failed after %d attempts. Last error: %s", o.cfg.Agent.MaxRetries, lastError)

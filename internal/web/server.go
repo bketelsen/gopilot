@@ -15,18 +15,25 @@ type StateProvider interface {
 	AllRunning() []*domain.RunEntry
 }
 
-type Server struct {
-	router chi.Router
-	state  StateProvider
-	cfg    *config.Config
-	sseHub *SSEHub
+// MetricsProvider abstracts access to metrics counters.
+type MetricsProvider interface {
+	All() map[string]int64
 }
 
-func NewServer(state StateProvider, cfg *config.Config) *Server {
+type Server struct {
+	router  chi.Router
+	state   StateProvider
+	cfg     *config.Config
+	sseHub  *SSEHub
+	metrics MetricsProvider
+}
+
+func NewServer(state StateProvider, cfg *config.Config, metrics MetricsProvider) *Server {
 	s := &Server{
-		state:  state,
-		cfg:    cfg,
-		sseHub: NewSSEHub(),
+		state:   state,
+		cfg:     cfg,
+		sseHub:  NewSSEHub(),
+		metrics: metrics,
 	}
 	s.router = s.buildRouter()
 	return s
@@ -40,6 +47,7 @@ func (s *Server) buildRouter() chi.Router {
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Get("/health", s.handleHealth)
 		r.Get("/state", s.handleState)
+		r.Get("/metrics", s.handleMetrics)
 		r.Get("/events", s.sseHub.HandleSSE)
 	})
 
@@ -68,6 +76,15 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 		"running_count": len(running),
 		"running":       running,
 	})
+}
+
+func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	if s.metrics != nil {
+		json.NewEncoder(w).Encode(s.metrics.All())
+	} else {
+		json.NewEncoder(w).Encode(map[string]int64{})
+	}
 }
 
 func (s *Server) handleDashboardPage(w http.ResponseWriter, r *http.Request) {
