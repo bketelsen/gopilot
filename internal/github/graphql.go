@@ -210,7 +210,7 @@ func (c *GraphQLClient) execute(ctx context.Context, query string, variables map
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Authorization", "Bearer "+c.cfg.Token)
+	req.Header.Set("Authorization", "token "+c.cfg.Token)
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := c.http.Do(req)

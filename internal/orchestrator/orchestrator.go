@@ -205,7 +205,7 @@ func (o *Orchestrator) Tick(ctx context.Context) {
 
 	var candidates []domain.Issue
 	for _, issue := range issues {
-		if o.state.IsClaimed(issue.ID) || o.state.GetRunning(issue.ID) != nil || o.state.IsInRetryQueue(issue.ID) || o.retryQueue.Has(issue.ID) {
+		if o.state.IsCompleted(issue.ID) || o.state.IsClaimed(issue.ID) || o.state.GetRunning(issue.ID) != nil || o.state.IsInRetryQueue(issue.ID) || o.retryQueue.Has(issue.ID) {
 			continue
 		}
 		if issue.IsBlocked(resolved) {
@@ -358,6 +358,7 @@ func (o *Orchestrator) monitorAgent(issue domain.Issue, sess *agent.Session, ent
 	if sess.ExitCode == 0 {
 		log.Info("agent completed successfully")
 		o.metrics.Increment("issues_completed")
+		o.state.MarkCompleted(issue.ID)
 		o.state.Release(issue.ID)
 	} else {
 		log.Warn("agent exited with error", "exit_code", sess.ExitCode, "error", sess.ExitErr)

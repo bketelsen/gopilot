@@ -56,6 +56,8 @@ func (c *Config) Validate() error {
 func resolveEnv(s string) string {
 	if strings.HasPrefix(s, "$") {
 		name := strings.TrimPrefix(s, "$")
+		name = strings.TrimPrefix(name, "{")
+		name = strings.TrimSuffix(name, "}")
 		if val, ok := os.LookupEnv(name); ok {
 			return val
 		}

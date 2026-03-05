@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strconv"
 	"syscall"
 	"time"
@@ -93,7 +92,7 @@ func (r *CopilotRunner) Stop(sess *Session) error {
 }
 
 func (r *CopilotRunner) buildArgs(prompt string, workspace string, opts AgentOpts) []string {
-	sharePath := filepath.Join(workspace, ".gopilot-session.md")
+	sharePath := ".gopilot-session.md"
 	args := []string{
 		"-p", prompt,
 		"--allow-all",

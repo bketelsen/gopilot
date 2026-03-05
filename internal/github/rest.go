@@ -96,7 +96,7 @@ func (c *RESTClient) fetchRepoIssues(ctx context.Context, repo string) ([]domain
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Authorization", "Bearer "+c.cfg.Token)
+	req.Header.Set("Authorization", "token "+c.cfg.Token)
 	req.Header.Set("Accept", "application/vnd.github+json")
 
 	resp, err := c.http.Do(req)
@@ -136,7 +136,7 @@ func (c *RESTClient) FetchIssueState(ctx context.Context, repo string, id int) (
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Authorization", "Bearer "+c.cfg.Token)
+	req.Header.Set("Authorization", "token "+c.cfg.Token)
 	req.Header.Set("Accept", "application/vnd.github+json")
 
 	resp, err := c.http.Do(req)
@@ -171,7 +171,7 @@ func (c *RESTClient) AddComment(ctx context.Context, repo string, id int, body s
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Authorization", "Bearer "+c.cfg.Token)
+	req.Header.Set("Authorization", "token "+c.cfg.Token)
 	req.Header.Set("Accept", "application/vnd.github+json")
 	req.Header.Set("Content-Type", "application/json")
 
@@ -201,7 +201,7 @@ func (c *RESTClient) AddLabel(ctx context.Context, repo string, id int, label st
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Authorization", "Bearer "+c.cfg.Token)
+	req.Header.Set("Authorization", "token "+c.cfg.Token)
 	req.Header.Set("Accept", "application/vnd.github+json")
 	req.Header.Set("Content-Type", "application/json")
 

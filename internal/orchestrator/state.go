@@ -8,21 +8,23 @@ import (
 
 // State manages the orchestrator's runtime state. Thread-safe.
 type State struct {
-	mu      sync.RWMutex
-	running map[int]*domain.RunEntry
-	claimed map[int]bool
-	retry   map[int]*domain.RetryEntry
-	history map[int][]domain.CompletedRun
-	totals  domain.TokenTotals
+	mu        sync.RWMutex
+	running   map[int]*domain.RunEntry
+	claimed   map[int]bool
+	retry     map[int]*domain.RetryEntry
+	history   map[int][]domain.CompletedRun
+	completed map[int]bool
+	totals    domain.TokenTotals
 }
 
 // NewState creates an empty state.
 func NewState() *State {
 	return &State{
-		running: make(map[int]*domain.RunEntry),
-		claimed: make(map[int]bool),
-		retry:   make(map[int]*domain.RetryEntry),
-		history: make(map[int][]domain.CompletedRun),
+		running:   make(map[int]*domain.RunEntry),
+		claimed:   make(map[int]bool),
+		retry:     make(map[int]*domain.RetryEntry),
+		history:   make(map[int][]domain.CompletedRun),
+		completed: make(map[int]bool),
 	}
 }
 
@@ -115,6 +117,18 @@ func (s *State) IsInRetryQueue(issueID int) bool {
 	defer s.mu.RUnlock()
 	_, ok := s.retry[issueID]
 	return ok
+}
+
+func (s *State) MarkCompleted(issueID int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.completed[issueID] = true
+}
+
+func (s *State) IsCompleted(issueID int) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.completed[issueID]
 }
 
 func (s *State) AddHistory(issueID int, run domain.CompletedRun) {
