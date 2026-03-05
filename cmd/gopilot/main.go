@@ -33,6 +33,7 @@ func main() {
 	configPath := flag.String("config", "gopilot.yaml", "path to config file")
 	dryRun := flag.Bool("dry-run", false, "list eligible issues without dispatching")
 	debug := flag.Bool("debug", false, "enable debug logging")
+	port := flag.String("port", "", "override dashboard listen port (e.g., 8080)")
 	flag.Parse()
 
 	level := slog.LevelInfo
@@ -45,6 +46,11 @@ func main() {
 	if err != nil {
 		slog.Error("failed to load config", "path", *configPath, "error", err)
 		os.Exit(1)
+	}
+
+	if *port != "" {
+		cfg.Dashboard.Addr = ":" + *port
+		cfg.Dashboard.Enabled = true
 	}
 
 	restClient := ghclient.NewRESTClient(cfg.GitHub, "https://api.github.com/")
