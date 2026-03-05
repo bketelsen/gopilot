@@ -1,6 +1,9 @@
 package config
 
-import "time"
+import (
+	"strings"
+	"time"
+)
 
 type Config struct {
 	GitHub    GitHubConfig    `yaml:"github"`
@@ -44,13 +47,20 @@ type HooksConfig struct {
 }
 
 type AgentConfig struct {
-	Command               string `yaml:"command"`
-	Model                 string `yaml:"model"`
-	MaxAutopilotContinues int    `yaml:"max_autopilot_continues"`
-	TurnTimeoutMS         int    `yaml:"turn_timeout_ms"`
-	StallTimeoutMS        int    `yaml:"stall_timeout_ms"`
-	MaxRetryBackoffMS     int    `yaml:"max_retry_backoff_ms"`
-	MaxRetries            int    `yaml:"max_retries"`
+	Command               string          `yaml:"command"`
+	Model                 string          `yaml:"model"`
+	MaxAutopilotContinues int             `yaml:"max_autopilot_continues"`
+	TurnTimeoutMS         int             `yaml:"turn_timeout_ms"`
+	StallTimeoutMS        int             `yaml:"stall_timeout_ms"`
+	MaxRetryBackoffMS     int             `yaml:"max_retry_backoff_ms"`
+	MaxRetries            int             `yaml:"max_retries"`
+	Overrides             []AgentOverride `yaml:"overrides"`
+}
+
+type AgentOverride struct {
+	Repos   []string `yaml:"repos"`
+	Labels  []string `yaml:"labels"`
+	Command string   `yaml:"command"`
 }
 
 type SkillsConfig struct {
@@ -108,4 +118,24 @@ func (c *Config) TurnTimeout() time.Duration {
 
 func (c *Config) HookTimeout() time.Duration {
 	return time.Duration(c.Workspace.HookTimeoutMS) * time.Millisecond
+}
+
+// AgentCommandForIssue returns the agent command to use for a given repo and set of labels,
+// checking overrides in order and falling back to the default agent command.
+func (c *Config) AgentCommandForIssue(repo string, labels []string) string {
+	for _, override := range c.Agent.Overrides {
+		for _, r := range override.Repos {
+			if r == repo {
+				return override.Command
+			}
+		}
+		for _, ol := range override.Labels {
+			for _, il := range labels {
+				if strings.EqualFold(ol, il) {
+					return override.Command
+				}
+			}
+		}
+	}
+	return c.Agent.Command
 }

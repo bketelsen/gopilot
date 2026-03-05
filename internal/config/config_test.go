@@ -112,6 +112,60 @@ workspace:
 	}
 }
 
+func TestAgentOverrides(t *testing.T) {
+	yaml := `
+github:
+  token: tok
+  repos: [owner/repo-a, owner/repo-b]
+  project: {owner: "@me", number: 1}
+  eligible_labels: [gopilot]
+workspace: {root: /tmp}
+agent:
+  command: copilot
+  overrides:
+    - repos: [owner/repo-b]
+      command: claude
+    - labels: [use-claude]
+      command: claude
+`
+	dir := t.TempDir()
+	path := filepath.Join(dir, "gopilot.yaml")
+	os.WriteFile(path, []byte(yaml), 0644)
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.Agent.Overrides) != 2 {
+		t.Fatalf("overrides = %d, want 2", len(cfg.Agent.Overrides))
+	}
+	if cfg.Agent.Overrides[0].Command != "claude" {
+		t.Errorf("override command = %q", cfg.Agent.Overrides[0].Command)
+	}
+}
+
+func TestResolveAgentForIssue(t *testing.T) {
+	cfg := &Config{
+		Agent: AgentConfig{
+			Command: "copilot",
+			Overrides: []AgentOverride{
+				{Repos: []string{"owner/repo-b"}, Command: "claude"},
+				{Labels: []string{"use-claude"}, Command: "claude"},
+			},
+		},
+	}
+
+	if cmd := cfg.AgentCommandForIssue("owner/repo-a", nil); cmd != "copilot" {
+		t.Errorf("repo-a should use copilot, got %q", cmd)
+	}
+	if cmd := cfg.AgentCommandForIssue("owner/repo-b", nil); cmd != "claude" {
+		t.Errorf("repo-b should use claude, got %q", cmd)
+	}
+	if cmd := cfg.AgentCommandForIssue("owner/repo-a", []string{"use-claude"}); cmd != "claude" {
+		t.Errorf("use-claude label should use claude, got %q", cmd)
+	}
+}
+
 func TestLoadValidation(t *testing.T) {
 	tests := []struct {
 		name string
