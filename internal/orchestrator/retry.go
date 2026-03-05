@@ -29,13 +29,14 @@ func NewRetryQueue() *RetryQueue {
 	}
 }
 
-func (q *RetryQueue) Enqueue(issueID int, identifier string, attempt int, errMsg string, maxBackoff time.Duration) {
+func (q *RetryQueue) Enqueue(issueID int, repo string, identifier string, attempt int, errMsg string, maxBackoff time.Duration) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
 	delay := BackoffDelay(attempt, maxBackoff)
 	q.entries[issueID] = &domain.RetryEntry{
 		IssueID:    issueID,
+		Repo:       repo,
 		Identifier: identifier,
 		Attempt:    attempt,
 		DueAt:      time.Now().Add(delay),

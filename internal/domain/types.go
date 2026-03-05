@@ -147,9 +147,22 @@ func (r RunEntry) IsStalled(timeout time.Duration) bool {
 	return time.Since(r.LastEventAt) > timeout
 }
 
+// CompletedRun records a finished agent session for history.
+type CompletedRun struct {
+	SessionID  string
+	Attempt    int
+	StartedAt  time.Time
+	FinishedAt time.Time
+	Duration   time.Duration
+	ExitCode   int
+	Error      string
+	Tokens     TokenCounts
+}
+
 // RetryEntry tracks an issue waiting for retry.
 type RetryEntry struct {
 	IssueID    int
+	Repo       string // "owner/repo"
 	Identifier string // "owner/repo#42"
 	Attempt    int
 	DueAt      time.Time

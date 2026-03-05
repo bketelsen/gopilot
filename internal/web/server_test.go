@@ -19,9 +19,16 @@ func (m *mockState) AllRunning() []*domain.RunEntry {
 	return m.entries
 }
 
+func (m *mockState) RunningCount() int {
+	return len(m.entries)
+}
+
+func (m *mockState) GetRunning(issueID int) *domain.RunEntry { return nil }
+func (m *mockState) GetHistory(issueID int) []domain.CompletedRun { return nil }
+
 func TestHealthEndpoint(t *testing.T) {
 	state := &mockState{}
-	srv := NewServer(state, nil, nil)
+	srv := NewServer(state, nil, nil, nil)
 
 	req := httptest.NewRequest("GET", "/api/v1/health", nil)
 	w := httptest.NewRecorder()
@@ -44,7 +51,7 @@ func TestStateEndpoint(t *testing.T) {
 		},
 	}
 
-	srv := NewServer(state, nil, nil)
+	srv := NewServer(state, nil, nil, nil)
 	req := httptest.NewRequest("GET", "/api/v1/state", nil)
 	w := httptest.NewRecorder()
 	srv.ServeHTTP(w, req)

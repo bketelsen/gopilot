@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/bketelsen/gopilot/internal/config"
+	"github.com/bketelsen/gopilot/internal/domain"
 )
 
 // ProjectMeta holds discovered Projects v2 field IDs.
@@ -183,6 +184,15 @@ func (c *GraphQLClient) SetProjectStatus(ctx context.Context, itemID string, sta
 
 	_, err := c.execute(ctx, mutation, vars)
 	return err
+}
+
+// EnrichIssues enriches issues with Projects v2 data (priority, iteration, etc.).
+// This is a stub — full enrichment will be implemented later.
+func (c *GraphQLClient) EnrichIssues(ctx context.Context, issues []domain.Issue) ([]domain.Issue, error) {
+	if issues == nil || c.meta == nil {
+		return issues, nil
+	}
+	return issues, nil
 }
 
 func (c *GraphQLClient) execute(ctx context.Context, query string, variables map[string]any) (map[string]any, error) {

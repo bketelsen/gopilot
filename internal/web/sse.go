@@ -1,9 +1,13 @@
 package web
 
 import (
+	"bytes"
+	"context"
 	"fmt"
 	"net/http"
 	"sync"
+
+	"github.com/a-h/templ"
 )
 
 type SSEHub struct {
@@ -32,6 +36,12 @@ func (h *SSEHub) Broadcast(eventType string, data string) {
 		default:
 		}
 	}
+}
+
+func (h *SSEHub) BroadcastComponent(eventType string, component templ.Component) {
+	var buf bytes.Buffer
+	component.Render(context.Background(), &buf)
+	h.Broadcast(eventType, buf.String())
 }
 
 func (h *SSEHub) Subscribe() (chan SSEEvent, func()) {

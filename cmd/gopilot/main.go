@@ -33,6 +33,7 @@ func main() {
 	configPath := flag.String("config", "gopilot.yaml", "path to config file")
 	dryRun := flag.Bool("dry-run", false, "list eligible issues without dispatching")
 	debug := flag.Bool("debug", false, "enable debug logging")
+	port := flag.String("port", "", "override dashboard listen port (e.g., 8080)")
 	flag.Parse()
 
 	level := slog.LevelInfo
@@ -47,14 +48,41 @@ func main() {
 		os.Exit(1)
 	}
 
-	restClient := ghclient.NewRESTClient(cfg.GitHub, "https://api.github.com/")
-
-	agentRunner := &agent.CopilotRunner{
-		Command: cfg.Agent.Command,
-		Token:   cfg.GitHub.Token,
+	if *port != "" {
+		cfg.Dashboard.Addr = ":" + *port
+		cfg.Dashboard.Enabled = true
 	}
 
-	orch := orchestrator.NewOrchestrator(cfg, restClient, agentRunner, *configPath)
+	restClient := ghclient.NewRESTClient(cfg.GitHub, "https://api.github.com/")
+
+	runners := map[string]agent.Runner{
+		cfg.Agent.Command: &agent.CopilotRunner{
+			Command: cfg.Agent.Command,
+			Token:   cfg.GitHub.Token,
+		},
+	}
+	for _, override := range cfg.Agent.Overrides {
+		if _, exists := runners[override.Command]; !exists {
+			switch override.Command {
+			case "claude", "claude-code":
+				runners[override.Command] = &agent.ClaudeRunner{
+					Command: override.Command,
+					Token:   cfg.GitHub.Token,
+				}
+			default:
+				runners[override.Command] = &agent.CopilotRunner{
+					Command: override.Command,
+					Token:   cfg.GitHub.Token,
+				}
+			}
+		}
+	}
+
+	orch := orchestrator.NewOrchestrator(cfg, restClient, runners, *configPath)
+	orch.SetRateLimitFunc(func() (int, int) {
+		rl := restClient.GetRateLimit()
+		return rl.Remaining, rl.Limit
+	})
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

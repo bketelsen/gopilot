@@ -1,0 +1,74 @@
+package pages
+
+import (
+	"fmt"
+	"github.com/bketelsen/gopilot/internal/domain"
+	"github.com/bketelsen/gopilot/internal/web/templates/layouts"
+)
+
+templ IssueDetail(running *domain.RunEntry, history []domain.CompletedRun, issueID int, repo string) {
+	@layouts.Base(fmt.Sprintf("Issue %s#%d", repo, issueID)) {
+		<div class="space-y-6">
+			if running != nil {
+				<div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+					<h1 class="text-2xl font-bold">{ running.Issue.Title }</h1>
+					<div class="mt-2 text-gray-500">{ running.Issue.Identifier() }</div>
+					<div class="mt-4 flex gap-2">
+						for _, label := range running.Issue.Labels {
+							<span class="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">{ label }</span>
+						}
+					</div>
+					<div class="mt-4 grid grid-cols-3 gap-4 text-sm">
+						<div><span class="text-gray-500">Status: </span><span class="px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800">Running</span></div>
+						<div><span class="text-gray-500">Priority: </span>{ fmt.Sprintf("%d", running.Issue.Priority) }</div>
+						<div><span class="text-gray-500">Attempt: </span>{ fmt.Sprintf("%d", running.Attempt) }</div>
+					</div>
+				</div>
+			} else {
+				<div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+					<h1 class="text-2xl font-bold">{ fmt.Sprintf("%s#%d", repo, issueID) }</h1>
+					<div class="mt-2 text-gray-500">Not currently running</div>
+				</div>
+			}
+
+			<div class="bg-white dark:bg-gray-800 rounded-lg shadow">
+				<div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+					<h2 class="text-lg font-semibold">Session History</h2>
+				</div>
+				<div class="overflow-x-auto">
+					<table class="w-full text-sm">
+						<thead class="bg-gray-50 dark:bg-gray-700">
+							<tr>
+								<th class="px-4 py-2 text-left">Session</th>
+								<th class="px-4 py-2 text-left">Attempt</th>
+								<th class="px-4 py-2 text-left">Duration</th>
+								<th class="px-4 py-2 text-left">Exit Code</th>
+								<th class="px-4 py-2 text-left">Error</th>
+							</tr>
+						</thead>
+						<tbody>
+							if len(history) == 0 {
+								<tr><td colspan="5" class="px-4 py-8 text-center text-gray-500">No session history</td></tr>
+							}
+							for _, run := range history {
+								<tr class="border-t border-gray-200 dark:border-gray-700">
+									<td class="px-4 py-2 font-mono text-xs">{ run.SessionID }</td>
+									<td class="px-4 py-2">{ fmt.Sprintf("%d", run.Attempt) }</td>
+									<td class="px-4 py-2">{ FormatDuration(run.Duration) }</td>
+									<td class="px-4 py-2">
+										if run.ExitCode == 0 {
+											<span class="text-green-600">0</span>
+										} else {
+											<span class="text-red-600">{ fmt.Sprintf("%d", run.ExitCode) }</span>
+										}
+									</td>
+									<td class="px-4 py-2 text-red-500">{ run.Error }</td>
+								</tr>
+							}
+						</tbody>
+					</table>
+				</div>
+			</div>
+		</div>
+	}
+}

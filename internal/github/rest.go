@@ -6,18 +6,29 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/bketelsen/gopilot/internal/config"
 	"github.com/bketelsen/gopilot/internal/domain"
 )
 
+// RateLimit holds parsed GitHub API rate limit information.
+type RateLimit struct {
+	Remaining int
+	Limit     int
+	Reset     time.Time
+}
+
 // RESTClient implements GitHub REST API operations.
 type RESTClient struct {
-	cfg     config.GitHubConfig
-	baseURL string
-	http    *http.Client
+	cfg       config.GitHubConfig
+	baseURL   string
+	http      *http.Client
+	rateLimit RateLimit
+	mu        sync.RWMutex
 }
 
 // NewRESTClient creates a REST client. baseURL should end with "/".
@@ -26,6 +37,38 @@ func NewRESTClient(cfg config.GitHubConfig, baseURL string) *RESTClient {
 		cfg:     cfg,
 		baseURL: baseURL,
 		http:    &http.Client{Timeout: 30 * time.Second},
+	}
+}
+
+// GetRateLimit returns the most recently observed rate limit information.
+func (c *RESTClient) GetRateLimit() RateLimit {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.rateLimit
+}
+
+func (c *RESTClient) updateRateLimit(resp *http.Response) {
+	remaining := resp.Header.Get("X-RateLimit-Remaining")
+	limit := resp.Header.Get("X-RateLimit-Limit")
+	reset := resp.Header.Get("X-RateLimit-Reset")
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if remaining != "" {
+		if n, err := strconv.Atoi(remaining); err == nil {
+			c.rateLimit.Remaining = n
+		}
+	}
+	if limit != "" {
+		if n, err := strconv.Atoi(limit); err == nil {
+			c.rateLimit.Limit = n
+		}
+	}
+	if reset != "" {
+		if ts, err := strconv.ParseInt(reset, 10, 64); err == nil {
+			c.rateLimit.Reset = time.Unix(ts, 0)
+		}
 	}
 }
 
@@ -61,6 +104,7 @@ func (c *RESTClient) fetchRepoIssues(ctx context.Context, repo string) ([]domain
 		return nil, err
 	}
 	defer resp.Body.Close()
+	c.updateRateLimit(resp)
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -100,6 +144,7 @@ func (c *RESTClient) FetchIssueState(ctx context.Context, repo string, id int) (
 		return nil, err
 	}
 	defer resp.Body.Close()
+	c.updateRateLimit(resp)
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -135,6 +180,7 @@ func (c *RESTClient) AddComment(ctx context.Context, repo string, id int, body s
 		return err
 	}
 	defer resp.Body.Close()
+	c.updateRateLimit(resp)
 
 	if resp.StatusCode != http.StatusCreated {
 		body, _ := io.ReadAll(resp.Body)
@@ -164,6 +210,7 @@ func (c *RESTClient) AddLabel(ctx context.Context, repo string, id int, label st
 		return err
 	}
 	defer resp.Body.Close()
+	c.updateRateLimit(resp)
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -190,6 +237,12 @@ func (c *RESTClient) FetchIssueStates(ctx context.Context, issues []domain.Issue
 // Project status updates require the GraphQL API.
 func (c *RESTClient) SetProjectStatus(_ context.Context, _ domain.Issue, _ string) error {
 	return nil
+}
+
+// EnrichIssues is a no-op for the REST client.
+// Enrichment with Projects v2 fields requires the GraphQL API.
+func (c *RESTClient) EnrichIssues(_ context.Context, issues []domain.Issue) ([]domain.Issue, error) {
+	return issues, nil
 }
 
 // ghIssue is the raw GitHub API response shape.

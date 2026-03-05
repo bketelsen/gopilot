@@ -39,6 +39,9 @@ func (m *mockGitHub) AddComment(ctx context.Context, repo string, id int, body s
 func (m *mockGitHub) AddLabel(ctx context.Context, repo string, id int, label string) error {
 	return nil
 }
+func (m *mockGitHub) EnrichIssues(ctx context.Context, issues []domain.Issue) ([]domain.Issue, error) {
+	return issues, nil
+}
 
 // mockAgent implements agent.Runner for testing.
 type mockAgent struct {
@@ -99,7 +102,7 @@ func TestOrchestratorDispatch(t *testing.T) {
 	}
 	ag := &mockAgent{}
 
-	orch := NewOrchestrator(cfg, gh, ag)
+	orch := NewOrchestrator(cfg, gh, map[string]agent.Runner{"mock": ag})
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
@@ -149,7 +152,7 @@ func TestOrchestratorRespectsMaxConcurrency(t *testing.T) {
 	}
 	ag := &mockAgent{}
 
-	orch := NewOrchestrator(cfg, gh, ag)
+	orch := NewOrchestrator(cfg, gh, map[string]agent.Runner{"mock": ag})
 
 	ctx := context.Background()
 	orch.Tick(ctx)
@@ -194,7 +197,7 @@ func TestOrchestratorRetryOnAgentFailure(t *testing.T) {
 	}
 
 	failAgent := &mockFailAgent{}
-	orch := NewOrchestrator(cfg, gh, failAgent)
+	orch := NewOrchestrator(cfg, gh, map[string]agent.Runner{"mock": failAgent})
 
 	ctx := context.Background()
 	orch.Tick(ctx)
@@ -227,7 +230,7 @@ func TestOrchestratorStallDetection(t *testing.T) {
 		},
 	}
 	ag := &mockAgent{}
-	orch := NewOrchestrator(cfg, gh, ag)
+	orch := NewOrchestrator(cfg, gh, map[string]agent.Runner{"mock": ag})
 
 	ctx := context.Background()
 	orch.Tick(ctx) // dispatch
@@ -238,6 +241,76 @@ func TestOrchestratorStallDetection(t *testing.T) {
 
 	if orch.state.RunningCount() != 0 {
 		t.Errorf("running = %d, want 0 after stall detection", orch.state.RunningCount())
+	}
+}
+
+// mockGitHubSplit allows separate control of candidate vs state issues.
+type mockGitHubSplit struct {
+	candidates []domain.Issue
+	stateMap   map[int]*domain.Issue
+}
+
+func (m *mockGitHubSplit) FetchCandidateIssues(ctx context.Context) ([]domain.Issue, error) {
+	return m.candidates, nil
+}
+func (m *mockGitHubSplit) FetchIssueState(ctx context.Context, repo string, id int) (*domain.Issue, error) {
+	if iss, ok := m.stateMap[id]; ok {
+		return iss, nil
+	}
+	return nil, nil
+}
+func (m *mockGitHubSplit) FetchIssueStates(ctx context.Context, issues []domain.Issue) ([]domain.Issue, error) {
+	return m.candidates, nil
+}
+func (m *mockGitHubSplit) SetProjectStatus(ctx context.Context, issue domain.Issue, status string) error {
+	return nil
+}
+func (m *mockGitHubSplit) AddComment(ctx context.Context, repo string, id int, body string) error {
+	return nil
+}
+func (m *mockGitHubSplit) AddLabel(ctx context.Context, repo string, id int, label string) error {
+	return nil
+}
+func (m *mockGitHubSplit) EnrichIssues(ctx context.Context, issues []domain.Issue) ([]domain.Issue, error) {
+	return issues, nil
+}
+
+func TestRetrySkipsIneligibleIssue(t *testing.T) {
+	cfg := &config.Config{
+		GitHub: config.GitHubConfig{
+			Token: "tok", Repos: []string{"o/r"}, EligibleLabels: []string{"gopilot"},
+		},
+		Polling: config.PollingConfig{IntervalMS: 1000, MaxConcurrentAgents: 3},
+		Agent: config.AgentConfig{
+			Command: "mock", TurnTimeoutMS: 60000, StallTimeoutMS: 60000,
+			MaxRetries: 3, MaxRetryBackoffMS: 1000, MaxAutopilotContinues: 5,
+		},
+		Workspace: config.WorkspaceConfig{Root: t.TempDir(), HookTimeoutMS: 5000},
+		Prompt:    "Work",
+	}
+
+	// FetchIssueState returns issue with no eligible labels; FetchCandidateIssues returns nothing
+	ineligible := domain.Issue{ID: 1, Repo: "o/r", Labels: []string{}, Status: "Todo", Priority: 1}
+	gh := &mockGitHubSplit{
+		candidates: nil,
+		stateMap:   map[int]*domain.Issue{1: &ineligible},
+	}
+	ag := &mockAgent{}
+	orch := NewOrchestrator(cfg, gh, map[string]agent.Runner{"mock": ag})
+
+	// Manually enqueue a retry for issue 1
+	orch.retryQueue.Enqueue(1, "o/r", "o/r#1", 2, "crashed", time.Second)
+
+	// Set DueAt in the past so it's picked up
+	orch.retryQueue.mu.Lock()
+	orch.retryQueue.entries[1].DueAt = time.Now().Add(-time.Second)
+	orch.retryQueue.mu.Unlock()
+
+	ctx := context.Background()
+	orch.Tick(ctx)
+
+	if ag.started != 0 {
+		t.Errorf("started = %d, want 0 (ineligible issue should not be retried)", ag.started)
 	}
 }
 
@@ -261,7 +334,7 @@ func TestReconcileTerminalIssue(t *testing.T) {
 		},
 	}
 	ag := &mockAgent{}
-	orch := NewOrchestrator(cfg, gh, ag)
+	orch := NewOrchestrator(cfg, gh, map[string]agent.Runner{"mock": ag})
 
 	ctx := context.Background()
 	orch.Tick(ctx) // dispatch issue 1
@@ -273,5 +346,83 @@ func TestReconcileTerminalIssue(t *testing.T) {
 
 	if orch.state.RunningCount() != 0 {
 		t.Errorf("running = %d, want 0 after reconciling terminal issue", orch.state.RunningCount())
+	}
+}
+
+func TestBlockedIssueNotDispatched(t *testing.T) {
+	cfg := &config.Config{
+		GitHub: config.GitHubConfig{
+			Token: "tok", Repos: []string{"o/r"}, EligibleLabels: []string{"gopilot"},
+		},
+		Polling: config.PollingConfig{IntervalMS: 1000, MaxConcurrentAgents: 5},
+		Agent: config.AgentConfig{
+			Command: "mock", TurnTimeoutMS: 60000, StallTimeoutMS: 60000,
+			MaxRetries: 3, MaxRetryBackoffMS: 1000, MaxAutopilotContinues: 5,
+		},
+		Workspace: config.WorkspaceConfig{Root: t.TempDir(), HookTimeoutMS: 5000},
+		Prompt:    "Work on {{ .Issue.Title }}",
+	}
+
+	gh := &mockGitHub{
+		issues: []domain.Issue{
+			{ID: 1, Repo: "o/r", Title: "Blocked task", Body: "blocked by #2", BlockedBy: []int{2}, Labels: []string{"gopilot"}, Status: "Todo", Priority: 1, CreatedAt: time.Now()},
+			{ID: 3, Repo: "o/r", Title: "Normal task", Labels: []string{"gopilot"}, Status: "Todo", Priority: 2, CreatedAt: time.Now()},
+		},
+	}
+	ag := &mockAgent{}
+	orch := NewOrchestrator(cfg, gh, map[string]agent.Runner{"mock": ag})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	orch.Tick(ctx)
+
+	// Only issue 3 should be dispatched; issue 1 is blocked because #2 is not resolved
+	if ag.started != 1 {
+		t.Errorf("started = %d, want 1 (only unblocked issue)", ag.started)
+	}
+	if orch.state.RunningCount() != 1 {
+		t.Errorf("running = %d, want 1", orch.state.RunningCount())
+	}
+}
+
+func TestDispatchUsesCorrectAgent(t *testing.T) {
+	cfg := &config.Config{
+		GitHub: config.GitHubConfig{
+			Token: "tok", Repos: []string{"o/r"}, EligibleLabels: []string{"gopilot"},
+		},
+		Polling: config.PollingConfig{IntervalMS: 1000, MaxConcurrentAgents: 3},
+		Agent: config.AgentConfig{
+			Command: "mock", TurnTimeoutMS: 60000, StallTimeoutMS: 60000,
+			MaxRetries: 3, MaxRetryBackoffMS: 1000, MaxAutopilotContinues: 5,
+			Overrides: []config.AgentOverride{
+				{Labels: []string{"use-claude"}, Command: "claude-mock"},
+			},
+		},
+		Workspace: config.WorkspaceConfig{Root: t.TempDir(), HookTimeoutMS: 5000},
+		Prompt:    "Work",
+	}
+
+	gh := &mockGitHub{
+		issues: []domain.Issue{
+			{ID: 1, Repo: "o/r", Labels: []string{"gopilot", "use-claude"}, Status: "Todo", Priority: 1},
+		},
+	}
+
+	defaultAgent := &mockAgent{}
+	claudeAgent := &mockAgent{}
+	runners := map[string]agent.Runner{
+		"mock":        defaultAgent,
+		"claude-mock": claudeAgent,
+	}
+
+	orch := NewOrchestrator(cfg, gh, runners)
+	orch.Tick(context.Background())
+
+	if claudeAgent.started != 1 {
+		t.Errorf("claude agent started = %d, want 1", claudeAgent.started)
+	}
+	if defaultAgent.started != 0 {
+		t.Errorf("default agent started = %d, want 0", defaultAgent.started)
 	}
 }

@@ -1,0 +1,127 @@
+package pages
+
+import (
+	"fmt"
+	"github.com/bketelsen/gopilot/internal/config"
+	"github.com/bketelsen/gopilot/internal/web/templates/layouts"
+)
+
+type SettingsData struct {
+	Config        *config.Config
+	Skills        []SkillDisplay
+	AgentValid    map[string]bool
+	RateRemaining int
+	RateLimit     int
+}
+
+type SkillDisplay struct {
+	Name        string
+	Type        string
+	Description string
+}
+
+templ Settings(data SettingsData) {
+	@layouts.Base("Settings") {
+		<div class="space-y-6">
+			<h1 class="text-2xl font-bold">Settings</h1>
+
+			<div class="bg-white dark:bg-gray-800 rounded-lg shadow">
+				<div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+					<h2 class="text-lg font-semibold">Configuration</h2>
+				</div>
+				<div class="p-4 space-y-3 text-sm">
+					<div class="grid grid-cols-2 gap-2">
+						<span class="text-gray-500">Repos:</span>
+						<span>
+							for i, repo := range data.Config.GitHub.Repos {
+								if i > 0 {
+									{ ", " }
+								}
+								{ repo }
+							}
+						</span>
+						<span class="text-gray-500">Poll Interval:</span>
+						<span>{ fmt.Sprintf("%dms", data.Config.Polling.IntervalMS) }</span>
+						<span class="text-gray-500">Max Concurrent Agents:</span>
+						<span>{ fmt.Sprintf("%d", data.Config.Polling.MaxConcurrentAgents) }</span>
+						<span class="text-gray-500">Agent Command:</span>
+						<span class="font-mono">{ data.Config.Agent.Command }</span>
+						<span class="text-gray-500">Max Retries:</span>
+						<span>{ fmt.Sprintf("%d", data.Config.Agent.MaxRetries) }</span>
+						<span class="text-gray-500">Stall Timeout:</span>
+						<span>{ fmt.Sprintf("%dms", data.Config.Agent.StallTimeoutMS) }</span>
+						<span class="text-gray-500">Workspace Root:</span>
+						<span class="font-mono">{ data.Config.Workspace.Root }</span>
+					</div>
+				</div>
+			</div>
+
+			<div class="bg-white dark:bg-gray-800 rounded-lg shadow">
+				<div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+					<h2 class="text-lg font-semibold">Loaded Skills</h2>
+				</div>
+				<ul class="divide-y divide-gray-200 dark:divide-gray-700">
+					if len(data.Skills) == 0 {
+						<li class="px-4 py-3 text-gray-500 text-sm">No skills loaded</li>
+					}
+					for _, skill := range data.Skills {
+						<li class="px-4 py-3 flex items-center gap-3">
+							<span class="font-medium">{ skill.Name }</span>
+							@SkillTypeBadge(skill.Type)
+							<span class="text-sm text-gray-500">{ skill.Description }</span>
+						</li>
+					}
+				</ul>
+			</div>
+
+			<div class="bg-white dark:bg-gray-800 rounded-lg shadow">
+				<div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+					<h2 class="text-lg font-semibold">GitHub Connection</h2>
+				</div>
+				<div class="p-4 text-sm">
+					<span class="text-gray-500">Token: </span>
+					if data.Config.GitHub.Token != "" {
+						<span class="text-green-600">Configured</span>
+					} else {
+						<span class="text-red-600">Missing</span>
+					}
+					<div class="mt-2">
+						<span class="text-gray-500">Rate Limit: </span>
+						<span>{ fmt.Sprintf("%d / %d remaining", data.RateRemaining, data.RateLimit) }</span>
+					</div>
+				</div>
+			</div>
+
+			<div class="bg-white dark:bg-gray-800 rounded-lg shadow">
+				<div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+					<h2 class="text-lg font-semibold">Agent Commands</h2>
+				</div>
+				<ul class="divide-y divide-gray-200 dark:divide-gray-700">
+					for cmd, valid := range data.AgentValid {
+						<li class="px-4 py-3 flex items-center gap-3">
+							<span class="font-mono">{ cmd }</span>
+							if valid {
+								<span class="text-green-600 text-sm">Found in PATH</span>
+							} else {
+								<span class="text-red-600 text-sm">Not found</span>
+							}
+						</li>
+					}
+				</ul>
+			</div>
+		</div>
+	}
+}
+
+templ SkillTypeBadge(skillType string) {
+	switch skillType {
+		case "rigid":
+			<span class="px-2 py-0.5 text-xs rounded bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">rigid</span>
+		case "flexible":
+			<span class="px-2 py-0.5 text-xs rounded bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">flexible</span>
+		case "technique":
+			<span class="px-2 py-0.5 text-xs rounded bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200">technique</span>
+		default:
+			<span class="px-2 py-0.5 text-xs rounded bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200">{ skillType }</span>
+	}
+}

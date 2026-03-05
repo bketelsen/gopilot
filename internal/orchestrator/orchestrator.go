@@ -24,7 +24,7 @@ import (
 type Orchestrator struct {
 	cfg        *config.Config
 	github     gh.Client
-	agent      agent.Runner
+	agents     map[string]agent.Runner
 	workspace  workspace.Manager
 	state        *State
 	retryQueue   *RetryQueue
@@ -35,14 +35,15 @@ type Orchestrator struct {
 	sseHub       *web.SSEHub
 	metrics      *metrics.Counters
 	tokenTracker *metrics.TokenTracker
+	rateLimitFn  func() (remaining, limit int)
 }
 
 // NewOrchestrator creates a new orchestrator.
-func NewOrchestrator(cfg *config.Config, github gh.Client, agentRunner agent.Runner, configPath ...string) *Orchestrator {
+func NewOrchestrator(cfg *config.Config, github gh.Client, agents map[string]agent.Runner, configPath ...string) *Orchestrator {
 	o := &Orchestrator{
 		cfg:        cfg,
 		github:     github,
-		agent:      agentRunner,
+		agents:     agents,
 		workspace:    workspace.NewFSManager(cfg.Workspace),
 		state:        NewState(),
 		retryQueue:   NewRetryQueue(),
@@ -96,8 +97,11 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 	}
 
 	if o.cfg.Dashboard.Enabled {
-		webSrv := web.NewServer(o.state, o.cfg, o.metrics)
+		webSrv := web.NewServer(o.state, o.cfg, o.metrics, o.retryQueue)
 		o.sseHub = webSrv.SSEHub()
+		webSrv.SetRefreshFunc(func() {
+			go o.Tick(ctx)
+		})
 		go func() {
 			slog.Info("dashboard starting", "addr", o.cfg.Dashboard.Addr)
 			if err := http.ListenAndServe(o.cfg.Dashboard.Addr, webSrv); err != nil {
@@ -159,14 +163,19 @@ func (o *Orchestrator) Tick(ctx context.Context) {
 		if !o.state.SlotsAvailable(o.cfg.Polling.MaxConcurrentAgents) {
 			// Re-enqueue if no slots available.
 			maxBackoff := time.Duration(o.cfg.Agent.MaxRetryBackoffMS) * time.Millisecond
-			o.retryQueue.Enqueue(retry.IssueID, retry.Identifier, retry.Attempt, retry.Error, maxBackoff)
+			o.retryQueue.Enqueue(retry.IssueID, retry.Repo, retry.Identifier, retry.Attempt, retry.Error, maxBackoff)
 			continue
 		}
 		slog.Info("retrying issue", "issue", retry.Identifier, "attempt", retry.Attempt)
 		// Fetch fresh issue state for retry.
-		issue, err := o.github.FetchIssueState(ctx, "", retry.IssueID)
+		issue, err := o.github.FetchIssueState(ctx, retry.Repo, retry.IssueID)
 		if err != nil || issue == nil {
 			slog.Warn("retry: could not fetch issue state", "issue_id", retry.IssueID, "error", err)
+			continue
+		}
+		if !issue.IsEligible(o.cfg.GitHub.EligibleLabels, o.cfg.GitHub.ExcludedLabels) {
+			slog.Info("retry: issue no longer eligible, releasing", "issue", retry.Identifier)
+			o.state.Release(issue.ID)
 			continue
 		}
 		o.state.Release(issue.ID) // Release claim so dispatch can re-claim
@@ -179,9 +188,28 @@ func (o *Orchestrator) Tick(ctx context.Context) {
 		return
 	}
 
+	// Parse BlockedBy from body text
+	for i := range issues {
+		if len(issues[i].BlockedBy) == 0 {
+			issues[i].BlockedBy = domain.ParseBlockedBy(issues[i].Body)
+		}
+	}
+
+	// Build resolved map for blocking check
+	resolved := make(map[int]bool)
+	for _, issue := range issues {
+		if issue.IsTerminal() {
+			resolved[issue.ID] = true
+		}
+	}
+
 	var candidates []domain.Issue
 	for _, issue := range issues {
 		if o.state.IsClaimed(issue.ID) || o.state.GetRunning(issue.ID) != nil || o.state.IsInRetryQueue(issue.ID) || o.retryQueue.Has(issue.ID) {
+			continue
+		}
+		if issue.IsBlocked(resolved) {
+			slog.Debug("skipping blocked issue", "issue", issue.Identifier(), "blocked_by", issue.BlockedBy)
 			continue
 		}
 		candidates = append(candidates, issue)
@@ -194,6 +222,33 @@ func (o *Orchestrator) Tick(ctx context.Context) {
 			break
 		}
 		o.dispatch(ctx, issue, 1)
+	}
+
+	if o.rateLimitFn != nil {
+		remaining, limit := o.rateLimitFn()
+		o.metrics.Set("github_rate_limit_remaining", int64(remaining))
+		o.metrics.Set("github_rate_limit_limit", int64(limit))
+	}
+}
+
+func (o *Orchestrator) agentForIssue(issue domain.Issue) agent.Runner {
+	cmd := o.cfg.AgentCommandForIssue(issue.Repo, issue.Labels)
+	if runner, ok := o.agents[cmd]; ok {
+		return runner
+	}
+	if runner, ok := o.agents[o.cfg.Agent.Command]; ok {
+		return runner
+	}
+	for _, runner := range o.agents {
+		return runner
+	}
+	return nil
+}
+
+func (o *Orchestrator) stopSession(sess *agent.Session) {
+	for _, runner := range o.agents {
+		runner.Stop(sess)
+		return
 	}
 }
 
@@ -229,11 +284,18 @@ func (o *Orchestrator) dispatch(ctx context.Context, issue domain.Issue, attempt
 		log.Warn("failed to set status to In Progress", "error", err)
 	}
 
+	runner := o.agentForIssue(issue)
+	if runner == nil {
+		log.Error("no agent runner available")
+		o.state.Release(issue.ID)
+		return
+	}
+
 	opts := agent.AgentOpts{
 		Model:            o.cfg.Agent.Model,
 		MaxContinuations: o.cfg.Agent.MaxAutopilotContinues,
 	}
-	sess, err := o.agent.Start(ctx, wsPath, rendered, opts)
+	sess, err := runner.Start(ctx, wsPath, rendered, opts)
 	if err != nil {
 		log.Error("agent start failed", "error", err)
 		o.state.Release(issue.ID)
@@ -275,6 +337,24 @@ func (o *Orchestrator) monitorAgent(issue domain.Issue, sess *agent.Session, ent
 	delete(o.sessions, issue.ID)
 	o.sessionsMu.Unlock()
 
+	finishedAt := time.Now()
+	completedErrMsg := ""
+	if sess.ExitErr != nil {
+		completedErrMsg = sess.ExitErr.Error()
+	}
+	duration := finishedAt.Sub(entry.StartedAt)
+	o.state.AddHistory(issue.ID, domain.CompletedRun{
+		SessionID:  sess.ID,
+		Attempt:    entry.Attempt,
+		StartedAt:  entry.StartedAt,
+		FinishedAt: finishedAt,
+		Duration:   duration,
+		ExitCode:   sess.ExitCode,
+		Error:      completedErrMsg,
+		Tokens:     entry.Tokens,
+	})
+	o.metrics.RecordDuration("session_duration", duration)
+
 	if sess.ExitCode == 0 {
 		log.Info("agent completed successfully")
 		o.metrics.Increment("issues_completed")
@@ -288,7 +368,7 @@ func (o *Orchestrator) monitorAgent(issue domain.Issue, sess *agent.Session, ent
 		}
 		if entry.Attempt < o.cfg.Agent.MaxRetries {
 			maxBackoff := time.Duration(o.cfg.Agent.MaxRetryBackoffMS) * time.Millisecond
-			o.retryQueue.Enqueue(issue.ID, issue.Identifier(), entry.Attempt+1, errMsg, maxBackoff)
+			o.retryQueue.Enqueue(issue.ID, issue.Repo, issue.Identifier(), entry.Attempt+1, errMsg, maxBackoff)
 			log.Info("scheduled retry", "next_attempt", entry.Attempt+1)
 		} else {
 			o.handleMaxRetriesExceeded(issue, errMsg)
@@ -305,7 +385,7 @@ func (o *Orchestrator) detectStalls(ctx context.Context) {
 
 			o.sessionsMu.Lock()
 			if sess, ok := o.sessions[entry.Issue.ID]; ok {
-				o.agent.Stop(sess)
+				o.stopSession(sess)
 				delete(o.sessions, entry.Issue.ID)
 			}
 			o.sessionsMu.Unlock()
@@ -318,7 +398,7 @@ func (o *Orchestrator) detectStalls(ctx context.Context) {
 
 			if entry.Attempt < o.cfg.Agent.MaxRetries {
 				maxBackoff := time.Duration(o.cfg.Agent.MaxRetryBackoffMS) * time.Millisecond
-				o.retryQueue.Enqueue(entry.Issue.ID, entry.Issue.Identifier(), entry.Attempt+1, "stalled", maxBackoff)
+				o.retryQueue.Enqueue(entry.Issue.ID, entry.Issue.Repo, entry.Issue.Identifier(), entry.Attempt+1, "stalled", maxBackoff)
 			} else {
 				o.handleMaxRetriesExceeded(entry.Issue, "stalled")
 			}
@@ -356,7 +436,7 @@ func (o *Orchestrator) reconcile(ctx context.Context) {
 func (o *Orchestrator) stopAndCleanup(ctx context.Context, entry *domain.RunEntry, removeWorkspace bool) {
 	o.sessionsMu.Lock()
 	if sess, ok := o.sessions[entry.Issue.ID]; ok {
-		o.agent.Stop(sess)
+		o.stopSession(sess)
 		delete(o.sessions, entry.Issue.ID)
 	}
 	o.sessionsMu.Unlock()
@@ -378,9 +458,18 @@ func (o *Orchestrator) handleMaxRetriesExceeded(issue domain.Issue, lastError st
 	o.metrics.Increment("issues_failed")
 	o.state.Release(issue.ID)
 
+	if err := o.github.SetProjectStatus(context.Background(), issue, "Todo"); err != nil {
+		log.Warn("failed to reset status to Todo", "error", err)
+	}
+
 	comment := fmt.Sprintf("Gopilot failed after %d attempts. Last error: %s", o.cfg.Agent.MaxRetries, lastError)
 	o.github.AddComment(context.Background(), issue.Repo, issue.ID, comment)
 	o.github.AddLabel(context.Background(), issue.Repo, issue.ID, "gopilot-failed")
+}
+
+// SetRateLimitFunc sets a function to query GitHub API rate limit.
+func (o *Orchestrator) SetRateLimitFunc(fn func() (remaining, limit int)) {
+	o.rateLimitFn = fn
 }
 
 func (o *Orchestrator) shutdown() {
