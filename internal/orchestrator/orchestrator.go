@@ -24,11 +24,12 @@ type Orchestrator struct {
 	state      *State
 	retryQueue *RetryQueue
 	sessions   map[int]*agent.Session
+	configPath string
 }
 
 // NewOrchestrator creates a new orchestrator.
-func NewOrchestrator(cfg *config.Config, github gh.Client, agentRunner agent.Runner) *Orchestrator {
-	return &Orchestrator{
+func NewOrchestrator(cfg *config.Config, github gh.Client, agentRunner agent.Runner, configPath ...string) *Orchestrator {
+	o := &Orchestrator{
 		cfg:        cfg,
 		github:     github,
 		agent:      agentRunner,
@@ -37,6 +38,10 @@ func NewOrchestrator(cfg *config.Config, github gh.Client, agentRunner agent.Run
 		retryQueue: NewRetryQueue(),
 		sessions:   make(map[int]*agent.Session),
 	}
+	if len(configPath) > 0 {
+		o.configPath = configPath[0]
+	}
+	return o
 }
 
 // Run starts the main loop until context is canceled.
@@ -45,6 +50,31 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 		"poll_interval", o.cfg.PollInterval(),
 		"max_agents", o.cfg.Polling.MaxConcurrentAgents,
 	)
+
+	if o.configPath != "" {
+		watcher, err := config.Watch(o.configPath, func(newCfg *config.Config, loadErr error) {
+			if loadErr != nil {
+				slog.Error("config reload failed, keeping current config", "error", loadErr)
+				return
+			}
+			slog.Info("config reloaded successfully")
+			o.cfg.Polling.IntervalMS = newCfg.Polling.IntervalMS
+			o.cfg.Polling.MaxConcurrentAgents = newCfg.Polling.MaxConcurrentAgents
+			o.cfg.Agent.StallTimeoutMS = newCfg.Agent.StallTimeoutMS
+			o.cfg.Agent.TurnTimeoutMS = newCfg.Agent.TurnTimeoutMS
+			o.cfg.Agent.MaxRetries = newCfg.Agent.MaxRetries
+			o.cfg.Agent.MaxRetryBackoffMS = newCfg.Agent.MaxRetryBackoffMS
+			o.cfg.Agent.MaxAutopilotContinues = newCfg.Agent.MaxAutopilotContinues
+			o.cfg.Skills = newCfg.Skills
+			o.cfg.Prompt = newCfg.Prompt
+		})
+		if err != nil {
+			slog.Warn("failed to start config watcher", "error", err)
+		}
+		if watcher != nil {
+			defer watcher.Close()
+		}
+	}
 
 	ticker := time.NewTicker(o.cfg.PollInterval())
 	defer ticker.Stop()

@@ -54,7 +54,7 @@ func main() {
 		Token:   cfg.GitHub.Token,
 	}
 
-	orch := orchestrator.NewOrchestrator(cfg, restClient, agentRunner)
+	orch := orchestrator.NewOrchestrator(cfg, restClient, agentRunner, *configPath)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
