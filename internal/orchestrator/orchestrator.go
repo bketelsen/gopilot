@@ -169,6 +169,11 @@ func (o *Orchestrator) Tick(ctx context.Context) {
 			slog.Warn("retry: could not fetch issue state", "issue_id", retry.IssueID, "error", err)
 			continue
 		}
+		if !issue.IsEligible(o.cfg.GitHub.EligibleLabels, o.cfg.GitHub.ExcludedLabels) {
+			slog.Info("retry: issue no longer eligible, releasing", "issue", retry.Identifier)
+			o.state.Release(issue.ID)
+			continue
+		}
 		o.state.Release(issue.ID) // Release claim so dispatch can re-claim
 		o.dispatch(ctx, *issue, retry.Attempt)
 	}

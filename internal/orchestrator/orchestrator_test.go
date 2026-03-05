@@ -241,6 +241,73 @@ func TestOrchestratorStallDetection(t *testing.T) {
 	}
 }
 
+// mockGitHubSplit allows separate control of candidate vs state issues.
+type mockGitHubSplit struct {
+	candidates []domain.Issue
+	stateMap   map[int]*domain.Issue
+}
+
+func (m *mockGitHubSplit) FetchCandidateIssues(ctx context.Context) ([]domain.Issue, error) {
+	return m.candidates, nil
+}
+func (m *mockGitHubSplit) FetchIssueState(ctx context.Context, repo string, id int) (*domain.Issue, error) {
+	if iss, ok := m.stateMap[id]; ok {
+		return iss, nil
+	}
+	return nil, nil
+}
+func (m *mockGitHubSplit) FetchIssueStates(ctx context.Context, issues []domain.Issue) ([]domain.Issue, error) {
+	return m.candidates, nil
+}
+func (m *mockGitHubSplit) SetProjectStatus(ctx context.Context, issue domain.Issue, status string) error {
+	return nil
+}
+func (m *mockGitHubSplit) AddComment(ctx context.Context, repo string, id int, body string) error {
+	return nil
+}
+func (m *mockGitHubSplit) AddLabel(ctx context.Context, repo string, id int, label string) error {
+	return nil
+}
+
+func TestRetrySkipsIneligibleIssue(t *testing.T) {
+	cfg := &config.Config{
+		GitHub: config.GitHubConfig{
+			Token: "tok", Repos: []string{"o/r"}, EligibleLabels: []string{"gopilot"},
+		},
+		Polling: config.PollingConfig{IntervalMS: 1000, MaxConcurrentAgents: 3},
+		Agent: config.AgentConfig{
+			Command: "mock", TurnTimeoutMS: 60000, StallTimeoutMS: 60000,
+			MaxRetries: 3, MaxRetryBackoffMS: 1000, MaxAutopilotContinues: 5,
+		},
+		Workspace: config.WorkspaceConfig{Root: t.TempDir(), HookTimeoutMS: 5000},
+		Prompt:    "Work",
+	}
+
+	// FetchIssueState returns issue with no eligible labels; FetchCandidateIssues returns nothing
+	ineligible := domain.Issue{ID: 1, Repo: "o/r", Labels: []string{}, Status: "Todo", Priority: 1}
+	gh := &mockGitHubSplit{
+		candidates: nil,
+		stateMap:   map[int]*domain.Issue{1: &ineligible},
+	}
+	ag := &mockAgent{}
+	orch := NewOrchestrator(cfg, gh, ag)
+
+	// Manually enqueue a retry for issue 1
+	orch.retryQueue.Enqueue(1, "o/r", "o/r#1", 2, "crashed", time.Second)
+
+	// Set DueAt in the past so it's picked up
+	orch.retryQueue.mu.Lock()
+	orch.retryQueue.entries[1].DueAt = time.Now().Add(-time.Second)
+	orch.retryQueue.mu.Unlock()
+
+	ctx := context.Background()
+	orch.Tick(ctx)
+
+	if ag.started != 0 {
+		t.Errorf("started = %d, want 0 (ineligible issue should not be retried)", ag.started)
+	}
+}
+
 func TestReconcileTerminalIssue(t *testing.T) {
 	cfg := &config.Config{
 		GitHub: config.GitHubConfig{
