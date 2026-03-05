@@ -327,6 +327,22 @@ func (o *Orchestrator) monitorAgent(issue domain.Issue, sess *agent.Session, ent
 	delete(o.sessions, issue.ID)
 	o.sessionsMu.Unlock()
 
+	finishedAt := time.Now()
+	completedErrMsg := ""
+	if sess.ExitErr != nil {
+		completedErrMsg = sess.ExitErr.Error()
+	}
+	o.state.AddHistory(issue.ID, domain.CompletedRun{
+		SessionID:  sess.ID,
+		Attempt:    entry.Attempt,
+		StartedAt:  entry.StartedAt,
+		FinishedAt: finishedAt,
+		Duration:   finishedAt.Sub(entry.StartedAt),
+		ExitCode:   sess.ExitCode,
+		Error:      completedErrMsg,
+		Tokens:     entry.Tokens,
+	})
+
 	if sess.ExitCode == 0 {
 		log.Info("agent completed successfully")
 		o.metrics.Increment("issues_completed")

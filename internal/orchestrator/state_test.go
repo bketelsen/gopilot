@@ -71,3 +71,22 @@ func TestStateAllRunning(t *testing.T) {
 		t.Errorf("AllRunning len = %d, want 2", len(all))
 	}
 }
+
+func TestStateHistory(t *testing.T) {
+	s := NewState()
+	s.AddHistory(1, domain.CompletedRun{SessionID: "s1", Attempt: 1, ExitCode: 0})
+	s.AddHistory(1, domain.CompletedRun{SessionID: "s2", Attempt: 2, ExitCode: 1, Error: "crashed"})
+
+	history := s.GetHistory(1)
+	if len(history) != 2 {
+		t.Fatalf("history len = %d, want 2", len(history))
+	}
+	if history[0].SessionID != "s1" {
+		t.Errorf("first run session = %q, want s1", history[0].SessionID)
+	}
+
+	empty := s.GetHistory(999)
+	if len(empty) != 0 {
+		t.Errorf("expected empty history for unknown issue, got %d", len(empty))
+	}
+}

@@ -12,6 +12,7 @@ type State struct {
 	running map[int]*domain.RunEntry
 	claimed map[int]bool
 	retry   map[int]*domain.RetryEntry
+	history map[int][]domain.CompletedRun
 	totals  domain.TokenTotals
 }
 
@@ -21,6 +22,7 @@ func NewState() *State {
 		running: make(map[int]*domain.RunEntry),
 		claimed: make(map[int]bool),
 		retry:   make(map[int]*domain.RetryEntry),
+		history: make(map[int][]domain.CompletedRun),
 	}
 }
 
@@ -113,4 +115,19 @@ func (s *State) IsInRetryQueue(issueID int) bool {
 	defer s.mu.RUnlock()
 	_, ok := s.retry[issueID]
 	return ok
+}
+
+func (s *State) AddHistory(issueID int, run domain.CompletedRun) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.history[issueID] = append(s.history[issueID], run)
+}
+
+func (s *State) GetHistory(issueID int) []domain.CompletedRun {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	h := s.history[issueID]
+	out := make([]domain.CompletedRun, len(h))
+	copy(out, h)
+	return out
 }
