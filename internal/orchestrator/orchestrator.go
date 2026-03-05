@@ -11,6 +11,7 @@ import (
 	"github.com/bketelsen/gopilot/internal/agent"
 	"github.com/bketelsen/gopilot/internal/config"
 	"github.com/bketelsen/gopilot/internal/github"
+	"github.com/bketelsen/gopilot/internal/skill"
 	"github.com/bketelsen/gopilot/internal/workspace"
 )
 
@@ -27,6 +28,7 @@ type Orchestrator struct {
 	stallDetector *StallDetector
 	dispatcher    *Dispatcher
 	meta          *github.ProjectMeta
+	skillsText    string // formatted skills for prompt injection
 }
 
 // New creates a new Orchestrator from the given config.
@@ -46,6 +48,16 @@ func New(cfg *config.Config, cfgPath string) (*Orchestrator, error) {
 
 	runner := agent.NewCopilotRunner(cfg.Agent.Command)
 
+	// Load skills
+	var skillsText string
+	if len(cfg.Skills.Dirs) > 0 {
+		skills, err := LoadSkills(cfg.Skills.Dirs, cfg.Skills.Enabled)
+		if err != nil {
+			return nil, fmt.Errorf("load skills: %w", err)
+		}
+		skillsText = skill.FormatForPrompt(skills)
+	}
+
 	var cfgModTime time.Time
 	if info, err := os.Stat(cfgPath); err == nil {
 		cfgModTime = info.ModTime()
@@ -61,6 +73,7 @@ func New(cfg *config.Config, cfgPath string) (*Orchestrator, error) {
 		state:         NewState(),
 		retryQueue:    NewRetryQueue(cfg.Agent.MaxRetries, cfg.Agent.MaxRetryBackoffMS),
 		stallDetector: NewStallDetector(cfg.Agent.StallTimeoutMS),
+		skillsText:    skillsText,
 	}
 
 	return o, nil
@@ -76,7 +89,7 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 	o.meta = meta
 
 	o.dispatcher = NewDispatcher(
-		o.gh, o.ws, o.runner, o.state, meta, o.cfg.Prompt,
+		o.gh, o.ws, o.runner, o.state, meta, o.cfg.Prompt, o.skillsText,
 		agentDispatchConfig{
 			MaxContinues: o.cfg.Agent.MaxAutopilotContinues,
 			Model:        o.cfg.Agent.Model,

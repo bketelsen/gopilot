@@ -22,6 +22,7 @@ type Dispatcher struct {
 	state      *State
 	meta       *github.ProjectMeta
 	prompt     string
+	skillsText string
 	agentCfg   agentDispatchConfig
 	onComplete OnComplete
 }
@@ -39,6 +40,7 @@ func NewDispatcher(
 	state *State,
 	meta *github.ProjectMeta,
 	prompt string,
+	skillsText string,
 	cfg agentDispatchConfig,
 	onComplete OnComplete,
 ) *Dispatcher {
@@ -49,6 +51,7 @@ func NewDispatcher(
 		state:      state,
 		meta:       meta,
 		prompt:     prompt,
+		skillsText: skillsText,
 		agentCfg:   cfg,
 		onComplete: onComplete,
 	}
@@ -91,6 +94,7 @@ func (d *Dispatcher) Dispatch(ctx context.Context, issue github.Issue) error {
 		Issue:  issue,
 		Repo:   issue.Repo,
 		Branch: branch,
+		Skills: d.skillsText,
 	})
 	if err != nil {
 		d.state.ReleaseClaim(issue)

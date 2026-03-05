@@ -42,6 +42,24 @@ Branch: {{.Branch}}`
 	}
 }
 
+func TestRenderPromptWithSkills(t *testing.T) {
+	tmpl := `Fix issue #{{.Issue.ID}}`
+
+	data := PromptData{
+		Issue:  github.Issue{ID: 42},
+		Skills: "\n\n## Skills\n\nWrite tests first.",
+	}
+
+	result, err := RenderPrompt(tmpl, data)
+	if err != nil {
+		t.Fatalf("RenderPrompt() error: %v", err)
+	}
+
+	if !strings.Contains(result, "Write tests first.") {
+		t.Errorf("result missing skills: %s", result)
+	}
+}
+
 func TestRenderPromptInvalidTemplate(t *testing.T) {
 	_, err := RenderPrompt("{{.Bad", PromptData{})
 	if err == nil {

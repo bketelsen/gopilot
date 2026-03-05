@@ -42,6 +42,18 @@ workspace:
     after_run: ""
     before_remove: ""
 
+skills:
+  # Directories to search for skill .md files (later dirs override earlier)
+  dirs:
+    - ./skills                       # Built-in skills shipped with gopilot
+    # - ./custom-skills              # Your custom skills
+  # Specific skills to enable (empty = all skills in dirs)
+  enabled:
+    - tdd
+    - verification
+    - pr-workflow
+    # - debugging                    # Uncomment to enable
+
 agent:
   command: "copilot"                # Agent CLI binary
   model: "claude-sonnet-4.6"       # Model for the agent to use

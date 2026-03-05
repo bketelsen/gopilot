@@ -13,7 +13,13 @@ type Config struct {
 	Polling   PollingConfig   `yaml:"polling"`
 	Workspace WorkspaceConfig `yaml:"workspace"`
 	Agent     AgentConfig     `yaml:"agent"`
+	Skills    SkillsConfig    `yaml:"skills"`
 	Prompt    string          `yaml:"prompt"`
+}
+
+type SkillsConfig struct {
+	Dirs    []string `yaml:"dirs"`    // directories to search for skill .md files
+	Enabled []string `yaml:"enabled"` // skill names to inject (empty = all)
 }
 
 type GitHubConfig struct {
