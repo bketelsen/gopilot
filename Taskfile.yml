@@ -1,0 +1,32 @@
+version: '3'
+
+vars:
+  VERSION:
+    sh: git describe --tags --always --dirty 2>/dev/null || echo "dev"
+
+tasks:
+  build:
+    desc: Build the gopilot binary
+    cmds:
+      - go build -ldflags "-X main.Version={{.VERSION}}" -o gopilot ./cmd/gopilot
+
+  test:
+    desc: Run all tests
+    cmds:
+      - go test -race ./...
+
+  lint:
+    desc: Run go vet
+    cmds:
+      - go vet ./...
+
+  clean:
+    desc: Remove build artifacts
+    cmds:
+      - rm -f gopilot
+
+  dev:
+    desc: Build and run
+    cmds:
+      - task: build
+      - ./gopilot {{.CLI_ARGS}}

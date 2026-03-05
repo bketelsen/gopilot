@@ -1,0 +1,23 @@
+# Binary
+/gopilot
+*.exe
+
+# Workspaces
+/workspaces/
+
+# Agent session files
+.gopilot-session.md
+.gopilot-prompt.md
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test
+coverage.out
