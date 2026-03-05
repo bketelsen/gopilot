@@ -3,6 +3,7 @@ package domain
 
 import (
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -73,6 +74,34 @@ func (i Issue) IsEligible(eligible, excluded []string) bool {
 		}
 	}
 	return hasEligible
+}
+
+// IsBlocked returns true if any issue in BlockedBy is not resolved.
+func (i Issue) IsBlocked(resolved map[int]bool) bool {
+	for _, blocker := range i.BlockedBy {
+		if !resolved[blocker] {
+			return true
+		}
+	}
+	return false
+}
+
+var blockedByRegex = regexp.MustCompile(`(?i)blocked\s+by\s+#(\d+)`)
+
+// ParseBlockedBy extracts "blocked by #N" references from issue body text.
+func ParseBlockedBy(body string) []int {
+	matches := blockedByRegex.FindAllStringSubmatch(body, -1)
+	var ids []int
+	for _, m := range matches {
+		if len(m) >= 2 {
+			var id int
+			fmt.Sscanf(m[1], "%d", &id)
+			if id > 0 {
+				ids = append(ids, id)
+			}
+		}
+	}
+	return ids
 }
 
 // SortByPriority sorts issues by priority (1=urgent first, 0=none last),

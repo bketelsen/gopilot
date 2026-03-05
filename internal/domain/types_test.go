@@ -111,6 +111,40 @@ func TestRunEntryIsStalled(t *testing.T) {
 	}
 }
 
+func TestIsBlockedBy(t *testing.T) {
+	issue := Issue{
+		ID:        3,
+		BlockedBy: []int{1, 2},
+		Status:    "Todo",
+		Labels:    []string{"gopilot"},
+	}
+
+	resolved := map[int]bool{1: true, 2: true}
+	if issue.IsBlocked(resolved) {
+		t.Error("should not be blocked when all blockers are resolved")
+	}
+
+	partial := map[int]bool{1: true, 2: false}
+	if !issue.IsBlocked(partial) {
+		t.Error("should be blocked when some blockers are unresolved")
+	}
+}
+
+func TestParseBlockedByFromBody(t *testing.T) {
+	body := `This feature depends on:
+- blocked by #42
+- Blocked By #99
+Some other text.`
+
+	blockers := ParseBlockedBy(body)
+	if len(blockers) != 2 {
+		t.Fatalf("got %d blockers, want 2", len(blockers))
+	}
+	if blockers[0] != 42 || blockers[1] != 99 {
+		t.Errorf("blockers = %v, want [42, 99]", blockers)
+	}
+}
+
 func TestTokenCountsAdd(t *testing.T) {
 	a := TokenCounts{InputTokens: 100, OutputTokens: 50}
 	b := TokenCounts{InputTokens: 200, OutputTokens: 100}
