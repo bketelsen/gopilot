@@ -1,6 +1,7 @@
 package github
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -326,14 +327,76 @@ func (c *RESTClient) RemoveLabel(ctx context.Context, repo string, id int, label
 	return nil
 }
 
-// CreateIssue creates a new GitHub issue. Not yet implemented.
-func (c *RESTClient) CreateIssue(_ context.Context, _, _, _ string, _ []string) (*domain.Issue, error) {
-	return nil, fmt.Errorf("not implemented")
+// CreateIssue creates a new GitHub issue with the given title, body, and labels.
+func (c *RESTClient) CreateIssue(ctx context.Context, repo, title, body string, labels []string) (*domain.Issue, error) {
+	parts := strings.SplitN(repo, "/", 2)
+	if len(parts) != 2 {
+		return nil, fmt.Errorf("invalid repo: %s", repo)
+	}
+
+	payload := map[string]any{"title": title, "body": body, "labels": labels}
+	jsonPayload, err := json.Marshal(payload)
+	if err != nil {
+		return nil, err
+	}
+
+	url := fmt.Sprintf("%srepos/%s/%s/issues", c.baseURL, parts[0], parts[1])
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(jsonPayload))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "token "+c.cfg.Token)
+	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	c.updateRateLimit(resp)
+
+	if resp.StatusCode != http.StatusCreated {
+		respBody, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("GitHub API error %d: %s", resp.StatusCode, respBody)
+	}
+
+	var raw ghIssue
+	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
+		return nil, err
+	}
+	issue := raw.toDomain(repo)
+	return &issue, nil
 }
 
-// AddSubIssue adds a child issue to a parent issue. Not yet implemented.
-func (c *RESTClient) AddSubIssue(_ context.Context, _ string, _, _ int) error {
-	return fmt.Errorf("not implemented")
+// AddSubIssue adds a child issue to a parent issue.
+func (c *RESTClient) AddSubIssue(ctx context.Context, repo string, parentID, childID int) error {
+	parts := strings.SplitN(repo, "/", 2)
+	if len(parts) != 2 {
+		return fmt.Errorf("invalid repo: %s", repo)
+	}
+	payload := fmt.Sprintf(`{"sub_issue_id":%d}`, childID)
+	url := fmt.Sprintf("%srepos/%s/%s/issues/%d/sub_issues", c.baseURL, parts[0], parts[1], parentID)
+	req, err := http.NewRequestWithContext(ctx, "POST", url, strings.NewReader(payload))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "token "+c.cfg.Token)
+	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	c.updateRateLimit(resp)
+
+	if resp.StatusCode != http.StatusCreated {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("GitHub API error %d: %s", resp.StatusCode, body)
+	}
+	return nil
 }
 
 // ghIssue is the raw GitHub API response shape.
