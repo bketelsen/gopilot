@@ -6,6 +6,7 @@ import (
 
 	"github.com/bketelsen/gopilot/internal/config"
 	"github.com/bketelsen/gopilot/internal/domain"
+	"github.com/bketelsen/gopilot/internal/web/templates/layouts"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 )
@@ -51,6 +52,7 @@ func (s *Server) buildRouter() chi.Router {
 		r.Get("/events", s.sseHub.HandleSSE)
 	})
 
+	r.Handle("/static/*", http.StripPrefix("/static/", http.FileServer(http.Dir("internal/web/static"))))
 	r.Get("/", s.handleDashboardPage)
 
 	return r
@@ -88,6 +90,6 @@ func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleDashboardPage(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/html")
-	w.Write([]byte("<html><body><h1>Gopilot Dashboard</h1><p>Coming soon.</p></body></html>"))
+	component := layouts.Base("Dashboard")
+	component.Render(r.Context(), w)
 }
