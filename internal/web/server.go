@@ -5,19 +5,24 @@ import (
 	"net/http"
 
 	"github.com/bketelsen/gopilot/internal/config"
-	"github.com/bketelsen/gopilot/internal/orchestrator"
+	"github.com/bketelsen/gopilot/internal/domain"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 )
 
+// StateProvider abstracts access to orchestrator state to avoid circular imports.
+type StateProvider interface {
+	AllRunning() []*domain.RunEntry
+}
+
 type Server struct {
 	router chi.Router
-	state  *orchestrator.State
+	state  StateProvider
 	cfg    *config.Config
 	sseHub *SSEHub
 }
 
-func NewServer(state *orchestrator.State, cfg *config.Config) *Server {
+func NewServer(state StateProvider, cfg *config.Config) *Server {
 	s := &Server{
 		state:  state,
 		cfg:    cfg,

@@ -8,11 +8,19 @@ import (
 	"time"
 
 	"github.com/bketelsen/gopilot/internal/domain"
-	"github.com/bketelsen/gopilot/internal/orchestrator"
 )
 
+// mockState implements StateProvider for testing.
+type mockState struct {
+	entries []*domain.RunEntry
+}
+
+func (m *mockState) AllRunning() []*domain.RunEntry {
+	return m.entries
+}
+
 func TestHealthEndpoint(t *testing.T) {
-	state := orchestrator.NewState()
+	state := &mockState{}
 	srv := NewServer(state, nil)
 
 	req := httptest.NewRequest("GET", "/api/v1/health", nil)
@@ -25,13 +33,16 @@ func TestHealthEndpoint(t *testing.T) {
 }
 
 func TestStateEndpoint(t *testing.T) {
-	state := orchestrator.NewState()
-	state.AddRunning(42, &domain.RunEntry{
-		Issue:     domain.Issue{ID: 42, Repo: "o/r", Title: "Fix bug"},
-		SessionID: "sess-1",
-		StartedAt: time.Now(),
-		Attempt:   1,
-	})
+	state := &mockState{
+		entries: []*domain.RunEntry{
+			{
+				Issue:     domain.Issue{ID: 42, Repo: "o/r", Title: "Fix bug"},
+				SessionID: "sess-1",
+				StartedAt: time.Now(),
+				Attempt:   1,
+			},
+		},
+	}
 
 	srv := NewServer(state, nil)
 	req := httptest.NewRequest("GET", "/api/v1/state", nil)

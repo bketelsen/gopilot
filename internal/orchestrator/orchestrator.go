@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"strconv"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 	gh "github.com/bketelsen/gopilot/internal/github"
 	"github.com/bketelsen/gopilot/internal/prompt"
 	"github.com/bketelsen/gopilot/internal/skills"
+	"github.com/bketelsen/gopilot/internal/web"
 	"github.com/bketelsen/gopilot/internal/workspace"
 )
 
@@ -27,6 +29,7 @@ type Orchestrator struct {
 	sessions   map[int]*agent.Session
 	configPath string
 	skills     []*skills.Skill
+	sseHub     *web.SSEHub
 }
 
 // NewOrchestrator creates a new orchestrator.
@@ -85,10 +88,24 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 		}
 	}
 
+	if o.cfg.Dashboard.Enabled {
+		webSrv := web.NewServer(o.state, o.cfg)
+		o.sseHub = webSrv.SSEHub()
+		go func() {
+			slog.Info("dashboard starting", "addr", o.cfg.Dashboard.Addr)
+			if err := http.ListenAndServe(o.cfg.Dashboard.Addr, webSrv); err != nil {
+				slog.Error("dashboard server error", "error", err)
+			}
+		}()
+	}
+
 	ticker := time.NewTicker(o.cfg.PollInterval())
 	defer ticker.Stop()
 
 	o.Tick(ctx)
+	if o.sseHub != nil {
+		o.sseHub.Broadcast("agent-update", "refresh")
+	}
 
 	for {
 		select {
@@ -98,6 +115,9 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 			return nil
 		case <-ticker.C:
 			o.Tick(ctx)
+			if o.sseHub != nil {
+				o.sseHub.Broadcast("agent-update", "refresh")
+			}
 		}
 	}
 }
