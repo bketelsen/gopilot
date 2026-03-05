@@ -90,3 +90,40 @@ func TestStateHistory(t *testing.T) {
 		t.Errorf("expected empty history for unknown issue, got %d", len(empty))
 	}
 }
+
+func TestPlanningState(t *testing.T) {
+	s := NewState()
+
+	if s.PlanningCount() != 0 {
+		t.Errorf("initial PlanningCount = %d, want 0", s.PlanningCount())
+	}
+
+	entry := &PlanningEntry{
+		IssueID:        1,
+		Repo:           "o/r",
+		Phase:          PlanningPhaseDetected,
+		LastCommentID:  0,
+		QuestionsAsked: 0,
+	}
+	s.AddPlanning(1, entry)
+
+	if s.PlanningCount() != 1 {
+		t.Errorf("PlanningCount = %d, want 1", s.PlanningCount())
+	}
+	if s.GetPlanning(1) == nil {
+		t.Error("GetPlanning(1) = nil, want entry")
+	}
+	if !s.IsPlanning(1) {
+		t.Error("IsPlanning(1) = false, want true")
+	}
+
+	s.GetPlanning(1).Phase = PlanningPhaseQuestioning
+	if s.GetPlanning(1).Phase != PlanningPhaseQuestioning {
+		t.Errorf("Phase = %q, want %q", s.GetPlanning(1).Phase, PlanningPhaseQuestioning)
+	}
+
+	s.RemovePlanning(1)
+	if s.PlanningCount() != 0 {
+		t.Errorf("after remove, PlanningCount = %d, want 0", s.PlanningCount())
+	}
+}

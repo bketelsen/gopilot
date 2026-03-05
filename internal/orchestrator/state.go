@@ -6,6 +6,28 @@ import (
 	"github.com/bketelsen/gopilot/internal/domain"
 )
 
+// PlanningPhase represents the current phase of an interactive planning workflow.
+type PlanningPhase string
+
+const (
+	PlanningPhaseDetected         PlanningPhase = "detected"
+	PlanningPhaseQuestioning      PlanningPhase = "questioning"
+	PlanningPhaseAwaitingReply    PlanningPhase = "awaiting_reply"
+	PlanningPhasePlanProposed     PlanningPhase = "plan_proposed"
+	PlanningPhaseAwaitingApproval PlanningPhase = "awaiting_approval"
+	PlanningPhaseCreatingIssues   PlanningPhase = "creating_issues"
+	PlanningPhaseComplete         PlanningPhase = "complete"
+)
+
+// PlanningEntry tracks the state of an interactive planning session for an issue.
+type PlanningEntry struct {
+	IssueID        int
+	Repo           string
+	Phase          PlanningPhase
+	LastCommentID  int
+	QuestionsAsked int
+}
+
 // State manages the orchestrator's runtime state. Thread-safe.
 type State struct {
 	mu        sync.RWMutex
@@ -14,6 +36,7 @@ type State struct {
 	retry     map[int]*domain.RetryEntry
 	history   map[int][]domain.CompletedRun
 	completed map[int]bool
+	planning  map[int]*PlanningEntry
 	totals    domain.TokenTotals
 }
 
@@ -25,6 +48,7 @@ func NewState() *State {
 		retry:     make(map[int]*domain.RetryEntry),
 		history:   make(map[int][]domain.CompletedRun),
 		completed: make(map[int]bool),
+		planning:  make(map[int]*PlanningEntry),
 	}
 }
 
@@ -144,4 +168,45 @@ func (s *State) GetHistory(issueID int) []domain.CompletedRun {
 	out := make([]domain.CompletedRun, len(h))
 	copy(out, h)
 	return out
+}
+
+func (s *State) AddPlanning(issueID int, entry *PlanningEntry) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.planning[issueID] = entry
+}
+
+func (s *State) GetPlanning(issueID int) *PlanningEntry {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.planning[issueID]
+}
+
+func (s *State) RemovePlanning(issueID int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.planning, issueID)
+}
+
+func (s *State) IsPlanning(issueID int) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	_, ok := s.planning[issueID]
+	return ok
+}
+
+func (s *State) PlanningCount() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return len(s.planning)
+}
+
+func (s *State) AllPlanning() []*PlanningEntry {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	entries := make([]*PlanningEntry, 0, len(s.planning))
+	for _, e := range s.planning {
+		entries = append(entries, e)
+	}
+	return entries
 }
