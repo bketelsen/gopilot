@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/bketelsen/gopilot/internal/config"
 )
@@ -81,5 +82,36 @@ func TestFetchCandidateIssues(t *testing.T) {
 	}
 	if issues[0].Labels[0] != "gopilot" {
 		t.Errorf("label = %q, want %q", issues[0].Labels[0], "gopilot")
+	}
+}
+
+func TestRateLimitParsing(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-RateLimit-Remaining", "4999")
+		w.Header().Set("X-RateLimit-Limit", "5000")
+		w.Header().Set("X-RateLimit-Reset", "1700000000")
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`[]`))
+	}))
+	defer ts.Close()
+
+	cfg := config.GitHubConfig{
+		Token:          "test",
+		Repos:          []string{"o/r"},
+		EligibleLabels: []string{"gopilot"},
+	}
+	client := NewRESTClient(cfg, ts.URL+"/")
+	client.FetchCandidateIssues(context.Background())
+
+	rl := client.GetRateLimit()
+	if rl.Remaining != 4999 {
+		t.Errorf("remaining = %d, want 4999", rl.Remaining)
+	}
+	if rl.Limit != 5000 {
+		t.Errorf("limit = %d, want 5000", rl.Limit)
+	}
+	wantReset := time.Unix(1700000000, 0)
+	if !rl.Reset.Equal(wantReset) {
+		t.Errorf("reset = %v, want %v", rl.Reset, wantReset)
 	}
 }
