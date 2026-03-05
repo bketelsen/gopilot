@@ -12,6 +12,7 @@ import (
 	"github.com/bketelsen/gopilot/internal/domain"
 	gh "github.com/bketelsen/gopilot/internal/github"
 	"github.com/bketelsen/gopilot/internal/prompt"
+	"github.com/bketelsen/gopilot/internal/skills"
 	"github.com/bketelsen/gopilot/internal/workspace"
 )
 
@@ -25,6 +26,7 @@ type Orchestrator struct {
 	retryQueue *RetryQueue
 	sessions   map[int]*agent.Session
 	configPath string
+	skills     []*skills.Skill
 }
 
 // NewOrchestrator creates a new orchestrator.
@@ -41,6 +43,13 @@ func NewOrchestrator(cfg *config.Config, github gh.Client, agentRunner agent.Run
 	if len(configPath) > 0 {
 		o.configPath = configPath[0]
 	}
+
+	allSkills, err := skills.LoadFromDir(cfg.Skills.Dir)
+	if err != nil {
+		slog.Warn("failed to load skills", "error", err)
+	}
+	o.skills = allSkills
+
 	return o
 }
 
@@ -181,7 +190,8 @@ func (o *Orchestrator) dispatch(ctx context.Context, issue domain.Issue, attempt
 		return
 	}
 
-	rendered, err := prompt.Render(o.cfg.Prompt, issue, attempt, "")
+	skillText := skills.InjectSkills(o.skills, o.cfg.Skills.Required, o.cfg.Skills.Optional)
+	rendered, err := prompt.Render(o.cfg.Prompt, issue, attempt, skillText)
 	if err != nil {
 		log.Error("prompt render failed", "error", err)
 		o.state.Release(issue.ID)
