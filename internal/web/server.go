@@ -32,6 +32,12 @@ type RetryProvider interface {
 	Len() int
 }
 
+// PlanningProvider abstracts access to planning state.
+type PlanningProvider interface {
+	AllPlanning() []*domain.PlanningEntry
+	PlanningCount() int
+}
+
 type Server struct {
 	router         chi.Router
 	state          StateProvider
@@ -39,16 +45,20 @@ type Server struct {
 	sseHub         *SSEHub
 	metrics        MetricsProvider
 	retries        RetryProvider
+	planning       PlanningProvider
 	triggerRefresh func()
 }
 
-func NewServer(state StateProvider, cfg *config.Config, metrics MetricsProvider, retries RetryProvider) *Server {
+func NewServer(state StateProvider, cfg *config.Config, metrics MetricsProvider, retries RetryProvider, planning ...PlanningProvider) *Server {
 	s := &Server{
 		state:   state,
 		cfg:     cfg,
 		sseHub:  NewSSEHub(),
 		metrics: metrics,
 		retries: retries,
+	}
+	if len(planning) > 0 {
+		s.planning = planning[0]
 	}
 	s.router = s.buildRouter()
 	return s
@@ -115,12 +125,16 @@ func (s *Server) handleDashboardPage(w http.ResponseWriter, r *http.Request) {
 	if s.retries != nil {
 		retries = s.retries.All()
 	}
+	var planningEntries []*domain.PlanningEntry
+	if s.planning != nil {
+		planningEntries = s.planning.AllPlanning()
+	}
 	m := map[string]int64{}
 	if s.metrics != nil {
 		m = s.metrics.All()
 	}
 
-	component := pages.Dashboard(running, retries, m, s.cfg.Polling.MaxConcurrentAgents)
+	component := pages.Dashboard(running, retries, planningEntries, m, s.cfg.Polling.MaxConcurrentAgents)
 	component.Render(r.Context(), w)
 }
 

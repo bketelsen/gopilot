@@ -123,6 +123,21 @@ func SortByPriority(issues []Issue) {
 	})
 }
 
+// Comment represents a GitHub issue comment.
+type Comment struct {
+	ID        int
+	Author    string
+	Body      string
+	CreatedAt time.Time
+}
+
+// SortCommentsByTime sorts comments by creation time (oldest first).
+func SortCommentsByTime(comments []Comment) {
+	sort.SliceStable(comments, func(i, j int) bool {
+		return comments[i].CreatedAt.Before(comments[j].CreatedAt)
+	})
+}
+
 // RunEntry tracks an active agent session.
 type RunEntry struct {
 	Issue       Issue
@@ -190,6 +205,19 @@ type TokenTotals struct {
 	TokenCounts
 	SecondsRunning float64
 	CostEstimate   float64 // estimated USD
+}
+
+// PlanningEntry tracks the state of an interactive planning session for display.
+type PlanningEntry struct {
+	IssueID        int
+	Repo           string
+	Phase          string
+	QuestionsAsked int
+}
+
+// Identifier returns the "owner/repo#N" string for the planning entry.
+func (p PlanningEntry) Identifier() string {
+	return fmt.Sprintf("%s#%d", p.Repo, p.IssueID)
 }
 
 // AgentEvent represents an event from a running agent.

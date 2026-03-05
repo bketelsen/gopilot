@@ -85,6 +85,7 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 			o.cfg.Agent.MaxRetries = newCfg.Agent.MaxRetries
 			o.cfg.Agent.MaxRetryBackoffMS = newCfg.Agent.MaxRetryBackoffMS
 			o.cfg.Agent.MaxAutopilotContinues = newCfg.Agent.MaxAutopilotContinues
+			o.cfg.Planning = newCfg.Planning
 			o.cfg.Skills = newCfg.Skills
 			o.cfg.Prompt = newCfg.Prompt
 		})
@@ -97,7 +98,7 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 	}
 
 	if o.cfg.Dashboard.Enabled {
-		webSrv := web.NewServer(o.state, o.cfg, o.metrics, o.retryQueue)
+		webSrv := web.NewServer(o.state, o.cfg, o.metrics, o.retryQueue, &StatePlanningAdapter{State: o.state})
 		o.sseHub = webSrv.SSEHub()
 		webSrv.SetRefreshFunc(func() {
 			go o.Tick(ctx)
@@ -215,9 +216,15 @@ func (o *Orchestrator) Tick(ctx context.Context) {
 		candidates = append(candidates, issue)
 	}
 
-	domain.SortByPriority(candidates)
+	// Partition planning vs coding issues
+	planningIssues, codingCandidates := partitionPlanningIssues(candidates, o.cfg.Planning.Label)
 
-	for _, issue := range candidates {
+	// Handle planning issues
+	o.processPlanningIssues(ctx, planningIssues)
+
+	// Dispatch coding issues
+	domain.SortByPriority(codingCandidates)
+	for _, issue := range codingCandidates {
 		if !o.state.SlotsAvailable(o.cfg.Polling.MaxConcurrentAgents) {
 			break
 		}
@@ -358,7 +365,11 @@ func (o *Orchestrator) monitorAgent(issue domain.Issue, sess *agent.Session, ent
 	if sess.ExitCode == 0 {
 		log.Info("agent completed successfully")
 		o.metrics.Increment("issues_completed")
-		o.state.MarkCompleted(issue.ID)
+
+		// Don't mark planning issues as fully completed — they need multi-turn dispatch
+		if !o.state.IsPlanning(issue.ID) {
+			o.state.MarkCompleted(issue.ID)
+		}
 		o.state.Release(issue.ID)
 	} else {
 		log.Warn("agent exited with error", "exit_code", sess.ExitCode, "error", sess.ExitErr)

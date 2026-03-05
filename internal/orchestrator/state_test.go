@@ -90,3 +90,75 @@ func TestStateHistory(t *testing.T) {
 		t.Errorf("expected empty history for unknown issue, got %d", len(empty))
 	}
 }
+
+func TestPlanningState(t *testing.T) {
+	s := NewState()
+
+	if s.PlanningCount() != 0 {
+		t.Errorf("initial PlanningCount = %d, want 0", s.PlanningCount())
+	}
+
+	entry := &PlanningEntry{
+		IssueID:        1,
+		Repo:           "o/r",
+		Phase:          PlanningPhaseDetected,
+		LastCommentID:  0,
+		QuestionsAsked: 0,
+	}
+	s.AddPlanning(1, entry)
+
+	if s.PlanningCount() != 1 {
+		t.Errorf("PlanningCount = %d, want 1", s.PlanningCount())
+	}
+	if s.GetPlanning(1) == nil {
+		t.Error("GetPlanning(1) = nil, want entry")
+	}
+	if !s.IsPlanning(1) {
+		t.Error("IsPlanning(1) = false, want true")
+	}
+
+	s.GetPlanning(1).Phase = PlanningPhaseQuestioning
+	if s.GetPlanning(1).Phase != PlanningPhaseQuestioning {
+		t.Errorf("Phase = %q, want %q", s.GetPlanning(1).Phase, PlanningPhaseQuestioning)
+	}
+
+	s.RemovePlanning(1)
+	if s.PlanningCount() != 0 {
+		t.Errorf("after remove, PlanningCount = %d, want 0", s.PlanningCount())
+	}
+}
+
+func TestUpdatePlanning(t *testing.T) {
+	s := NewState()
+
+	entry := &PlanningEntry{
+		IssueID:        1,
+		Repo:           "o/r",
+		Phase:          PlanningPhaseDetected,
+		LastCommentID:  0,
+		QuestionsAsked: 0,
+	}
+	s.AddPlanning(1, entry)
+
+	s.UpdatePlanning(1, func(e *PlanningEntry) {
+		e.Phase = PlanningPhaseAwaitingReply
+		e.QuestionsAsked++
+		e.LastCommentID = 42
+	})
+
+	got := s.GetPlanning(1)
+	if got.Phase != PlanningPhaseAwaitingReply {
+		t.Errorf("Phase = %q, want %q", got.Phase, PlanningPhaseAwaitingReply)
+	}
+	if got.QuestionsAsked != 1 {
+		t.Errorf("QuestionsAsked = %d, want 1", got.QuestionsAsked)
+	}
+	if got.LastCommentID != 42 {
+		t.Errorf("LastCommentID = %d, want 42", got.LastCommentID)
+	}
+
+	// UpdatePlanning on non-existent entry should be a no-op
+	s.UpdatePlanning(999, func(e *PlanningEntry) {
+		t.Error("callback should not be invoked for non-existent entry")
+	})
+}

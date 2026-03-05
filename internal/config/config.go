@@ -12,6 +12,7 @@ type Config struct {
 	Agent     AgentConfig     `yaml:"agent"`
 	Skills    SkillsConfig    `yaml:"skills"`
 	Dashboard DashboardConfig `yaml:"dashboard"`
+	Planning  PlanningConfig  `yaml:"planning"`
 	Prompt    string          `yaml:"prompt"`
 }
 
@@ -74,6 +75,15 @@ type DashboardConfig struct {
 	Addr    string `yaml:"addr"`
 }
 
+type PlanningConfig struct {
+	Label          string `yaml:"label"`
+	CompletedLabel string `yaml:"completed_label"`
+	ApproveCommand string `yaml:"approve_command"`
+	MaxQuestions   int    `yaml:"max_questions"`
+	Agent          string `yaml:"agent"`
+	Model          string `yaml:"model"`
+}
+
 func (c *Config) ApplyDefaults() {
 	if c.Polling.IntervalMS == 0 {
 		c.Polling.IntervalMS = 30000
@@ -101,6 +111,18 @@ func (c *Config) ApplyDefaults() {
 	}
 	if c.Dashboard.Addr == "" {
 		c.Dashboard.Addr = ":3000"
+	}
+	if c.Planning.Label == "" {
+		c.Planning.Label = "gopilot:plan"
+	}
+	if c.Planning.CompletedLabel == "" {
+		c.Planning.CompletedLabel = "gopilot:planned"
+	}
+	if c.Planning.ApproveCommand == "" {
+		c.Planning.ApproveCommand = "/approve"
+	}
+	if c.Planning.MaxQuestions == 0 {
+		c.Planning.MaxQuestions = 10
 	}
 }
 
