@@ -215,9 +215,15 @@ func (o *Orchestrator) Tick(ctx context.Context) {
 		candidates = append(candidates, issue)
 	}
 
-	domain.SortByPriority(candidates)
+	// Partition planning vs coding issues
+	planningIssues, codingCandidates := partitionPlanningIssues(candidates, o.cfg.Planning.Label)
 
-	for _, issue := range candidates {
+	// Handle planning issues
+	o.processPlanningIssues(ctx, planningIssues)
+
+	// Dispatch coding issues
+	domain.SortByPriority(codingCandidates)
+	for _, issue := range codingCandidates {
 		if !o.state.SlotsAvailable(o.cfg.Polling.MaxConcurrentAgents) {
 			break
 		}
