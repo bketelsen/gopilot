@@ -1,6 +1,10 @@
 package config
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
 
 func TestDefaults(t *testing.T) {
 	cfg := &Config{}
@@ -32,5 +36,139 @@ func TestDefaults(t *testing.T) {
 	}
 	if cfg.Dashboard.Addr != ":3000" {
 		t.Errorf("Addr = %q, want %q", cfg.Dashboard.Addr, ":3000")
+	}
+}
+
+func TestLoadFromYAML(t *testing.T) {
+	yaml := `
+github:
+  token: test-token
+  repos:
+    - owner/repo
+  project:
+    owner: "@me"
+    number: 1
+  eligible_labels:
+    - gopilot
+  excluded_labels:
+    - blocked
+polling:
+  interval_ms: 15000
+  max_concurrent_agents: 2
+agent:
+  command: copilot
+  model: claude-sonnet-4.6
+workspace:
+  root: /tmp/workspaces
+`
+	dir := t.TempDir()
+	path := filepath.Join(dir, "gopilot.yaml")
+	os.WriteFile(path, []byte(yaml), 0644)
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.GitHub.Token != "test-token" {
+		t.Errorf("Token = %q, want %q", cfg.GitHub.Token, "test-token")
+	}
+	if cfg.Polling.IntervalMS != 15000 {
+		t.Errorf("IntervalMS = %d, want 15000", cfg.Polling.IntervalMS)
+	}
+	// Defaults should be applied for unset fields
+	if cfg.Agent.MaxRetries != 3 {
+		t.Errorf("MaxRetries = %d, want 3 (default)", cfg.Agent.MaxRetries)
+	}
+}
+
+func TestLoadEnvResolution(t *testing.T) {
+	t.Setenv("GOPILOT_TEST_TOKEN", "secret-from-env")
+
+	yaml := `
+github:
+  token: $GOPILOT_TEST_TOKEN
+  repos:
+    - owner/repo
+  project:
+    owner: "@me"
+    number: 1
+  eligible_labels:
+    - gopilot
+agent:
+  command: copilot
+workspace:
+  root: /tmp/workspaces
+`
+	dir := t.TempDir()
+	path := filepath.Join(dir, "gopilot.yaml")
+	os.WriteFile(path, []byte(yaml), 0644)
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.GitHub.Token != "secret-from-env" {
+		t.Errorf("Token = %q, want %q", cfg.GitHub.Token, "secret-from-env")
+	}
+}
+
+func TestLoadValidation(t *testing.T) {
+	tests := []struct {
+		name string
+		yaml string
+	}{
+		{"missing token", `
+github:
+  repos: [owner/repo]
+  project: {owner: "@me", number: 1}
+  eligible_labels: [gopilot]
+agent: {command: copilot}
+workspace: {root: /tmp}
+`},
+		{"missing repos", `
+github:
+  token: tok
+  project: {owner: "@me", number: 1}
+  eligible_labels: [gopilot]
+agent: {command: copilot}
+workspace: {root: /tmp}
+`},
+		{"missing eligible_labels", `
+github:
+  token: tok
+  repos: [owner/repo]
+  project: {owner: "@me", number: 1}
+agent: {command: copilot}
+workspace: {root: /tmp}
+`},
+		{"missing agent command", `
+github:
+  token: tok
+  repos: [owner/repo]
+  project: {owner: "@me", number: 1}
+  eligible_labels: [gopilot]
+workspace: {root: /tmp}
+`},
+		{"missing workspace root", `
+github:
+  token: tok
+  repos: [owner/repo]
+  project: {owner: "@me", number: 1}
+  eligible_labels: [gopilot]
+agent: {command: copilot}
+`},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			path := filepath.Join(dir, "gopilot.yaml")
+			os.WriteFile(path, []byte(tt.yaml), 0644)
+
+			_, err := Load(path)
+			if err == nil {
+				t.Error("expected validation error")
+			}
+		})
 	}
 }
