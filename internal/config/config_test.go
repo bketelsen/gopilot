@@ -166,6 +166,61 @@ func TestResolveAgentForIssue(t *testing.T) {
 	}
 }
 
+func TestPlanningConfigDefaults(t *testing.T) {
+	cfg := &Config{}
+	cfg.ApplyDefaults()
+
+	if cfg.Planning.Label != "gopilot:plan" {
+		t.Errorf("Planning.Label = %q, want %q", cfg.Planning.Label, "gopilot:plan")
+	}
+	if cfg.Planning.CompletedLabel != "gopilot:planned" {
+		t.Errorf("Planning.CompletedLabel = %q, want %q", cfg.Planning.CompletedLabel, "gopilot:planned")
+	}
+	if cfg.Planning.ApproveCommand != "/approve" {
+		t.Errorf("Planning.ApproveCommand = %q, want %q", cfg.Planning.ApproveCommand, "/approve")
+	}
+	if cfg.Planning.MaxQuestions != 10 {
+		t.Errorf("Planning.MaxQuestions = %d, want 10", cfg.Planning.MaxQuestions)
+	}
+}
+
+func TestPlanningConfigFromYAML(t *testing.T) {
+	yaml := `
+github:
+  token: tok
+  repos: [o/r]
+  project: {owner: "@me", number: 1}
+  eligible_labels: [gopilot]
+agent: {command: copilot}
+workspace: {root: /tmp}
+planning:
+  label: "custom:plan"
+  agent: "claude"
+  model: "claude-sonnet-4-6"
+  max_questions: 5
+`
+	dir := t.TempDir()
+	path := filepath.Join(dir, "gopilot.yaml")
+	os.WriteFile(path, []byte(yaml), 0644)
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Planning.Label != "custom:plan" {
+		t.Errorf("Planning.Label = %q, want %q", cfg.Planning.Label, "custom:plan")
+	}
+	if cfg.Planning.Agent != "claude" {
+		t.Errorf("Planning.Agent = %q, want %q", cfg.Planning.Agent, "claude")
+	}
+	if cfg.Planning.Model != "claude-sonnet-4-6" {
+		t.Errorf("Planning.Model = %q, want %q", cfg.Planning.Model, "claude-sonnet-4-6")
+	}
+	if cfg.Planning.MaxQuestions != 5 {
+		t.Errorf("Planning.MaxQuestions = %d, want 5", cfg.Planning.MaxQuestions)
+	}
+}
+
 func TestLoadValidation(t *testing.T) {
 	tests := []struct {
 		name string
