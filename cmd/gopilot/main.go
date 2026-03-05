@@ -9,7 +9,10 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/bketelsen/gopilot/internal/agent"
 	"github.com/bketelsen/gopilot/internal/config"
+	ghclient "github.com/bketelsen/gopilot/internal/github"
+	"github.com/bketelsen/gopilot/internal/logging"
 	"github.com/bketelsen/gopilot/internal/orchestrator"
 )
 
@@ -27,34 +30,32 @@ func main() {
 		}
 	}
 
-	// Main run flags
 	configPath := flag.String("config", "gopilot.yaml", "path to config file")
 	dryRun := flag.Bool("dry-run", false, "list eligible issues without dispatching")
 	debug := flag.Bool("debug", false, "enable debug logging")
 	flag.Parse()
 
-	// Setup logging
 	level := slog.LevelInfo
 	if *debug {
 		level = slog.LevelDebug
 	}
-	config.SetupLogging(level)
+	logging.Setup(level)
 
-	// Load config
 	cfg, err := config.Load(*configPath)
 	if err != nil {
 		slog.Error("failed to load config", "path", *configPath, "error", err)
 		os.Exit(1)
 	}
 
-	// Create orchestrator
-	orch, err := orchestrator.New(cfg, *configPath)
-	if err != nil {
-		slog.Error("failed to create orchestrator", "error", err)
-		os.Exit(1)
+	restClient := ghclient.NewRESTClient(cfg.GitHub, "https://api.github.com/")
+
+	agentRunner := &agent.CopilotRunner{
+		Command: cfg.Agent.Command,
+		Token:   cfg.GitHub.Token,
 	}
 
-	// Setup signal handling
+	orch := orchestrator.NewOrchestrator(cfg, restClient, agentRunner)
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -74,7 +75,6 @@ func main() {
 		return
 	}
 
-	// Run the orchestrator
 	slog.Info("starting gopilot", "version", Version)
 	if err := orch.Run(ctx); err != nil {
 		slog.Error("orchestrator exited with error", "error", err)
@@ -88,11 +88,9 @@ func runInit() {
 		fmt.Fprintf(os.Stderr, "%s already exists\n", path)
 		os.Exit(1)
 	}
-
 	if err := os.WriteFile(path, []byte(config.ExampleConfig), 0644); err != nil {
 		fmt.Fprintf(os.Stderr, "failed to write %s: %v\n", path, err)
 		os.Exit(1)
 	}
-
 	fmt.Printf("Created %s — edit it with your GitHub token and repos.\n", path)
 }

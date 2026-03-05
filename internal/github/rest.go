@@ -172,6 +172,26 @@ func (c *RESTClient) AddLabel(ctx context.Context, repo string, id int, label st
 	return nil
 }
 
+// FetchIssueStates fetches the current state for each issue.
+// This is a convenience wrapper that calls FetchIssueState for each issue.
+func (c *RESTClient) FetchIssueStates(ctx context.Context, issues []domain.Issue) ([]domain.Issue, error) {
+	var result []domain.Issue
+	for _, iss := range issues {
+		updated, err := c.FetchIssueState(ctx, iss.Repo, iss.ID)
+		if err != nil {
+			return nil, fmt.Errorf("fetching state for %s#%d: %w", iss.Repo, iss.ID, err)
+		}
+		result = append(result, *updated)
+	}
+	return result, nil
+}
+
+// SetProjectStatus is a no-op for the REST client.
+// Project status updates require the GraphQL API.
+func (c *RESTClient) SetProjectStatus(_ context.Context, _ domain.Issue, _ string) error {
+	return nil
+}
+
 // ghIssue is the raw GitHub API response shape.
 type ghIssue struct {
 	Number    int       `json:"number"`
@@ -207,6 +227,9 @@ func (g ghIssue) toDomain(repo string) domain.Issue {
 		UpdatedAt: g.UpdatedAt,
 	}
 }
+
+// Ensure RESTClient satisfies the Client interface at compile time.
+var _ Client = (*RESTClient)(nil)
 
 func normalizeLabels(labels []string) []string {
 	out := make([]string, len(labels))
