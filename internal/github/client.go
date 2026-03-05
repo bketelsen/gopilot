@@ -15,4 +15,8 @@ type Client interface {
 	AddComment(ctx context.Context, repo string, id int, body string) error
 	AddLabel(ctx context.Context, repo string, id int, label string) error
 	EnrichIssues(ctx context.Context, issues []domain.Issue) ([]domain.Issue, error)
+	FetchIssueComments(ctx context.Context, repo string, id int) ([]domain.Comment, error)
+	RemoveLabel(ctx context.Context, repo string, id int, label string) error
+	CreateIssue(ctx context.Context, repo, title, body string, labels []string) (*domain.Issue, error)
+	AddSubIssue(ctx context.Context, repo string, parentID, childID int) error
 }

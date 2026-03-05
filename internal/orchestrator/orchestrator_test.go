@@ -42,6 +42,18 @@ func (m *mockGitHub) AddLabel(ctx context.Context, repo string, id int, label st
 func (m *mockGitHub) EnrichIssues(ctx context.Context, issues []domain.Issue) ([]domain.Issue, error) {
 	return issues, nil
 }
+func (m *mockGitHub) FetchIssueComments(ctx context.Context, repo string, id int) ([]domain.Comment, error) {
+	return nil, nil
+}
+func (m *mockGitHub) RemoveLabel(ctx context.Context, repo string, id int, label string) error {
+	return nil
+}
+func (m *mockGitHub) CreateIssue(ctx context.Context, repo, title, body string, labels []string) (*domain.Issue, error) {
+	return nil, nil
+}
+func (m *mockGitHub) AddSubIssue(ctx context.Context, repo string, parentID, childID int) error {
+	return nil
+}
 
 // mockAgent implements agent.Runner for testing.
 type mockAgent struct {
@@ -273,6 +285,18 @@ func (m *mockGitHubSplit) AddLabel(ctx context.Context, repo string, id int, lab
 }
 func (m *mockGitHubSplit) EnrichIssues(ctx context.Context, issues []domain.Issue) ([]domain.Issue, error) {
 	return issues, nil
+}
+func (m *mockGitHubSplit) FetchIssueComments(ctx context.Context, repo string, id int) ([]domain.Comment, error) {
+	return nil, nil
+}
+func (m *mockGitHubSplit) RemoveLabel(ctx context.Context, repo string, id int, label string) error {
+	return nil
+}
+func (m *mockGitHubSplit) CreateIssue(ctx context.Context, repo, title, body string, labels []string) (*domain.Issue, error) {
+	return nil, nil
+}
+func (m *mockGitHubSplit) AddSubIssue(ctx context.Context, repo string, parentID, childID int) error {
+	return nil
 }
 
 func TestRetrySkipsIneligibleIssue(t *testing.T) {

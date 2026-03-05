@@ -85,6 +85,36 @@ func TestFetchCandidateIssues(t *testing.T) {
 	}
 }
 
+func TestFetchIssueComments(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /repos/owner/repo/issues/1/comments", func(w http.ResponseWriter, r *http.Request) {
+		comments := []map[string]any{
+			{"id": 101, "body": "First comment", "created_at": "2026-01-01T00:00:00Z", "user": map[string]any{"login": "alice"}},
+			{"id": 102, "body": "Second comment", "created_at": "2026-01-02T00:00:00Z", "user": map[string]any{"login": "gopilot[bot]"}},
+		}
+		json.NewEncoder(w).Encode(comments)
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	cfg := config.GitHubConfig{Token: "test-token", Repos: []string{"owner/repo"}}
+	client := NewRESTClient(cfg, server.URL+"/")
+
+	comments, err := client.FetchIssueComments(context.Background(), "owner/repo", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(comments) != 2 {
+		t.Fatalf("got %d comments, want 2", len(comments))
+	}
+	if comments[0].Author != "alice" {
+		t.Errorf("comment[0].Author = %q, want %q", comments[0].Author, "alice")
+	}
+	if comments[1].ID != 102 {
+		t.Errorf("comment[1].ID = %d, want 102", comments[1].ID)
+	}
+}
+
 func TestRateLimitParsing(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-RateLimit-Remaining", "4999")
