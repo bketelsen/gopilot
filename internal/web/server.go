@@ -203,10 +203,16 @@ func (s *Server) handleSettingsPage(w http.ResponseWriter, r *http.Request) {
 		agentValid[override.Command] = isCommandAvailable(override.Command)
 	}
 
+	m := map[string]int64{}
+	if s.metrics != nil {
+		m = s.metrics.All()
+	}
 	data := pages.SettingsData{
-		Config:     s.cfg,
-		Skills:     nil, // TODO: wire skills provider
-		AgentValid: agentValid,
+		Config:        s.cfg,
+		Skills:        nil, // TODO: wire skills provider
+		AgentValid:    agentValid,
+		RateRemaining: int(m["github_rate_limit_remaining"]),
+		RateLimit:     int(m["github_rate_limit_limit"]),
 	}
 	component := pages.Settings(data)
 	component.Render(r.Context(), w)

@@ -7,9 +7,11 @@ import (
 )
 
 type SettingsData struct {
-	Config     *config.Config
-	Skills     []SkillDisplay
-	AgentValid map[string]bool
+	Config        *config.Config
+	Skills        []SkillDisplay
+	AgentValid    map[string]bool
+	RateRemaining int
+	RateLimit     int
 }
 
 type SkillDisplay struct {
@@ -83,6 +85,10 @@ templ Settings(data SettingsData) {
 					} else {
 						<span class="text-red-600">Missing</span>
 					}
+					<div class="mt-2">
+						<span class="text-gray-500">Rate Limit: </span>
+						<span>{ fmt.Sprintf("%d / %d remaining", data.RateRemaining, data.RateLimit) }</span>
+					</div>
 				</div>
 			</div>
 

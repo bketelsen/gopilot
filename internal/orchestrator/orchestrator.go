@@ -35,6 +35,7 @@ type Orchestrator struct {
 	sseHub       *web.SSEHub
 	metrics      *metrics.Counters
 	tokenTracker *metrics.TokenTracker
+	rateLimitFn  func() (remaining, limit int)
 }
 
 // NewOrchestrator creates a new orchestrator.
@@ -221,6 +222,12 @@ func (o *Orchestrator) Tick(ctx context.Context) {
 			break
 		}
 		o.dispatch(ctx, issue, 1)
+	}
+
+	if o.rateLimitFn != nil {
+		remaining, limit := o.rateLimitFn()
+		o.metrics.Set("github_rate_limit_remaining", int64(remaining))
+		o.metrics.Set("github_rate_limit_limit", int64(limit))
 	}
 }
 
@@ -458,6 +465,11 @@ func (o *Orchestrator) handleMaxRetriesExceeded(issue domain.Issue, lastError st
 	comment := fmt.Sprintf("Gopilot failed after %d attempts. Last error: %s", o.cfg.Agent.MaxRetries, lastError)
 	o.github.AddComment(context.Background(), issue.Repo, issue.ID, comment)
 	o.github.AddLabel(context.Background(), issue.Repo, issue.ID, "gopilot-failed")
+}
+
+// SetRateLimitFunc sets a function to query GitHub API rate limit.
+func (o *Orchestrator) SetRateLimitFunc(fn func() (remaining, limit int)) {
+	o.rateLimitFn = fn
 }
 
 func (o *Orchestrator) shutdown() {

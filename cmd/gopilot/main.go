@@ -79,6 +79,10 @@ func main() {
 	}
 
 	orch := orchestrator.NewOrchestrator(cfg, restClient, runners, *configPath)
+	orch.SetRateLimitFunc(func() (int, int) {
+		rl := restClient.GetRateLimit()
+		return rl.Remaining, rl.Limit
+	})
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

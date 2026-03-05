@@ -28,6 +28,18 @@ func TestCounters(t *testing.T) {
 	}
 }
 
+func TestSet(t *testing.T) {
+	c := NewCounters()
+	c.Set("gauge", 42)
+	if c.Get("gauge") != 42 {
+		t.Errorf("got %d, want 42", c.Get("gauge"))
+	}
+	c.Set("gauge", 10)
+	if c.Get("gauge") != 10 {
+		t.Errorf("got %d, want 10 after re-set", c.Get("gauge"))
+	}
+}
+
 func TestDurationStats(t *testing.T) {
 	c := NewCounters()
 	c.RecordDuration("session_duration", 30*time.Second)
