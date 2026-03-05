@@ -23,6 +23,9 @@ func (m *mockState) RunningCount() int {
 	return len(m.entries)
 }
 
+func (m *mockState) GetRunning(issueID int) *domain.RunEntry { return nil }
+func (m *mockState) GetHistory(issueID int) []domain.CompletedRun { return nil }
+
 func TestHealthEndpoint(t *testing.T) {
 	state := &mockState{}
 	srv := NewServer(state, nil, nil, nil)

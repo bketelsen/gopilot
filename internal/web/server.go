@@ -3,6 +3,7 @@ package web
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 
 	"github.com/bketelsen/gopilot/internal/config"
 	"github.com/bketelsen/gopilot/internal/domain"
@@ -15,6 +16,8 @@ import (
 type StateProvider interface {
 	AllRunning() []*domain.RunEntry
 	RunningCount() int
+	GetRunning(issueID int) *domain.RunEntry
+	GetHistory(issueID int) []domain.CompletedRun
 }
 
 // MetricsProvider abstracts access to metrics counters.
@@ -59,10 +62,14 @@ func (s *Server) buildRouter() chi.Router {
 		r.Get("/state", s.handleState)
 		r.Get("/metrics", s.handleMetrics)
 		r.Get("/events", s.sseHub.HandleSSE)
+		r.Get("/issues/{owner}/{repo}/{id}", s.handleIssueDetailAPI)
+		r.Get("/sprint", s.handleSprintAPI)
 	})
 
 	r.Handle("/static/*", http.StripPrefix("/static/", http.FileServer(http.Dir("internal/web/static"))))
 	r.Get("/", s.handleDashboardPage)
+	r.Get("/issues/{owner}/{repo}/{id}", s.handleIssueDetail)
+	r.Get("/sprint", s.handleSprintPage)
 
 	return r
 }
@@ -111,4 +118,76 @@ func (s *Server) handleDashboardPage(w http.ResponseWriter, r *http.Request) {
 
 	component := pages.Dashboard(running, retries, m, s.cfg.Polling.MaxConcurrentAgents)
 	component.Render(r.Context(), w)
+}
+
+func (s *Server) handleIssueDetail(w http.ResponseWriter, r *http.Request) {
+	owner := chi.URLParam(r, "owner")
+	repo := chi.URLParam(r, "repo")
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		http.Error(w, "invalid issue ID", http.StatusBadRequest)
+		return
+	}
+	fullRepo := owner + "/" + repo
+	running := s.state.GetRunning(id)
+	history := s.state.GetHistory(id)
+	component := pages.IssueDetail(running, history, id, fullRepo)
+	component.Render(r.Context(), w)
+}
+
+func (s *Server) handleIssueDetailAPI(w http.ResponseWriter, r *http.Request) {
+	owner := chi.URLParam(r, "owner")
+	repo := chi.URLParam(r, "repo")
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		http.Error(w, "invalid issue ID", http.StatusBadRequest)
+		return
+	}
+	_ = owner + "/" + repo
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"running": s.state.GetRunning(id),
+		"history": s.state.GetHistory(id),
+	})
+}
+
+func (s *Server) handleSprintPage(w http.ResponseWriter, r *http.Request) {
+	running := s.state.AllRunning()
+	byStatus := map[string][]domain.Issue{
+		"Todo": {}, "In Progress": {}, "In Review": {}, "Done": {},
+	}
+	iteration := ""
+	for _, entry := range running {
+		status := entry.Issue.Status
+		if _, ok := byStatus[status]; !ok {
+			status = "In Progress"
+		}
+		byStatus[status] = append(byStatus[status], entry.Issue)
+		if entry.Issue.Iteration != "" {
+			iteration = entry.Issue.Iteration
+		}
+	}
+	total := 0
+	for _, issues := range byStatus {
+		total += len(issues)
+	}
+	data := pages.SprintData{
+		Iteration: iteration,
+		ByStatus:  byStatus,
+		Total:     total,
+		Done:      len(byStatus["Done"]),
+	}
+	component := pages.Sprint(data)
+	component.Render(r.Context(), w)
+}
+
+func (s *Server) handleSprintAPI(w http.ResponseWriter, r *http.Request) {
+	running := s.state.AllRunning()
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"running_count": len(running),
+		"running":       running,
+	})
 }
