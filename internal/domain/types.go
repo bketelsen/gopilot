@@ -150,6 +150,7 @@ func (r RunEntry) IsStalled(timeout time.Duration) bool {
 // RetryEntry tracks an issue waiting for retry.
 type RetryEntry struct {
 	IssueID    int
+	Repo       string // "owner/repo"
 	Identifier string // "owner/repo#42"
 	Attempt    int
 	DueAt      time.Time

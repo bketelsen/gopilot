@@ -159,12 +159,12 @@ func (o *Orchestrator) Tick(ctx context.Context) {
 		if !o.state.SlotsAvailable(o.cfg.Polling.MaxConcurrentAgents) {
 			// Re-enqueue if no slots available.
 			maxBackoff := time.Duration(o.cfg.Agent.MaxRetryBackoffMS) * time.Millisecond
-			o.retryQueue.Enqueue(retry.IssueID, retry.Identifier, retry.Attempt, retry.Error, maxBackoff)
+			o.retryQueue.Enqueue(retry.IssueID, retry.Repo, retry.Identifier, retry.Attempt, retry.Error, maxBackoff)
 			continue
 		}
 		slog.Info("retrying issue", "issue", retry.Identifier, "attempt", retry.Attempt)
 		// Fetch fresh issue state for retry.
-		issue, err := o.github.FetchIssueState(ctx, "", retry.IssueID)
+		issue, err := o.github.FetchIssueState(ctx, retry.Repo, retry.IssueID)
 		if err != nil || issue == nil {
 			slog.Warn("retry: could not fetch issue state", "issue_id", retry.IssueID, "error", err)
 			continue
@@ -288,7 +288,7 @@ func (o *Orchestrator) monitorAgent(issue domain.Issue, sess *agent.Session, ent
 		}
 		if entry.Attempt < o.cfg.Agent.MaxRetries {
 			maxBackoff := time.Duration(o.cfg.Agent.MaxRetryBackoffMS) * time.Millisecond
-			o.retryQueue.Enqueue(issue.ID, issue.Identifier(), entry.Attempt+1, errMsg, maxBackoff)
+			o.retryQueue.Enqueue(issue.ID, issue.Repo, issue.Identifier(), entry.Attempt+1, errMsg, maxBackoff)
 			log.Info("scheduled retry", "next_attempt", entry.Attempt+1)
 		} else {
 			o.handleMaxRetriesExceeded(issue, errMsg)
@@ -318,7 +318,7 @@ func (o *Orchestrator) detectStalls(ctx context.Context) {
 
 			if entry.Attempt < o.cfg.Agent.MaxRetries {
 				maxBackoff := time.Duration(o.cfg.Agent.MaxRetryBackoffMS) * time.Millisecond
-				o.retryQueue.Enqueue(entry.Issue.ID, entry.Issue.Identifier(), entry.Attempt+1, "stalled", maxBackoff)
+				o.retryQueue.Enqueue(entry.Issue.ID, entry.Issue.Repo, entry.Issue.Identifier(), entry.Attempt+1, "stalled", maxBackoff)
 			} else {
 				o.handleMaxRetriesExceeded(entry.Issue, "stalled")
 			}
