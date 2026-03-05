@@ -2,6 +2,7 @@ package orchestrator
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"strings"
 	"time"
@@ -70,6 +71,9 @@ func (o *Orchestrator) processPlanningIssues(ctx context.Context, issues []domai
 				hasNew, lastID := hasNewHumanComment(o.github, ctx, issue.Repo, issue.ID, entry.LastCommentID)
 				if hasNew {
 					entry.LastCommentID = lastID
+					if o.sseHub != nil {
+						o.sseHub.Broadcast("planning:reply_detected", fmt.Sprintf(`{"issue_id":%d}`, issue.ID))
+					}
 					o.dispatchPlanningAgent(ctx, issue, entry)
 				}
 			}
@@ -160,6 +164,9 @@ func (o *Orchestrator) dispatchPlanningAgent(ctx context.Context, issue domain.I
 	entry.QuestionsAsked++
 
 	log.Info("planning agent dispatched", "session_id", sess.ID)
+	if o.sseHub != nil {
+		o.sseHub.Broadcast("planning:question_posted", fmt.Sprintf(`{"issue_id":%d}`, issue.ID))
+	}
 
 	go o.monitorAgent(issue, sess, runEntry)
 }
