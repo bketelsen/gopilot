@@ -135,6 +135,77 @@ func TestOrchestratorPartitionsPlanningIssues(t *testing.T) {
 	}
 }
 
+// mockSuccessAgent completes immediately with exit code 0.
+type mockSuccessAgent struct {
+	started int
+}
+
+func (m *mockSuccessAgent) Name() string { return "mock-success" }
+func (m *mockSuccessAgent) Start(ctx context.Context, workspace string, prompt string, opts agent.AgentOpts) (*agent.Session, error) {
+	m.started++
+	done := make(chan struct{})
+	close(done) // completes immediately
+	return &agent.Session{
+		ID: "success-session", PID: 11111, Done: done,
+		ExitCode: 0,
+		Cancel:   func() {},
+	}, nil
+}
+func (m *mockSuccessAgent) Stop(sess *agent.Session) error { return nil }
+
+func TestPlanningIssueNotMarkedCompleted(t *testing.T) {
+	cfg := &config.Config{
+		GitHub: config.GitHubConfig{
+			Token: "tok", Repos: []string{"o/r"}, EligibleLabels: []string{"gopilot"},
+		},
+		Polling: config.PollingConfig{IntervalMS: 1000, MaxConcurrentAgents: 5},
+		Agent: config.AgentConfig{
+			Command: "mock-success", TurnTimeoutMS: 60000, StallTimeoutMS: 60000,
+			MaxRetries: 3, MaxRetryBackoffMS: 1000, MaxAutopilotContinues: 5,
+		},
+		Workspace: config.WorkspaceConfig{Root: t.TempDir(), HookTimeoutMS: 5000},
+		Planning: config.PlanningConfig{
+			Label: "gopilot:plan", CompletedLabel: "gopilot:planned",
+			ApproveCommand: "/approve", MaxQuestions: 10, Agent: "mock-success",
+		},
+		Prompt: "Work",
+	}
+
+	planningIssue := domain.Issue{
+		ID: 1, Repo: "o/r", Title: "Plan: Auth system",
+		Labels: []string{"gopilot", "gopilot:plan"}, Status: "Todo",
+		Body: "We need auth", CreatedAt: time.Now(),
+	}
+
+	gh := &mockPlanningGitHub{
+		mockGitHub: mockGitHub{issues: []domain.Issue{planningIssue}},
+		comments:   map[int][]domain.Comment{},
+	}
+	ag := &mockSuccessAgent{}
+	orch := NewOrchestrator(cfg, gh, map[string]agent.Runner{"mock-success": ag})
+
+	ctx := context.Background()
+	orch.Tick(ctx)
+
+	// Wait for agent to complete (it closes Done immediately)
+	time.Sleep(100 * time.Millisecond)
+
+	// Planning issue must NOT be marked completed
+	if orch.state.IsCompleted(1) {
+		t.Error("planning issue should NOT be marked completed after agent exits")
+	}
+
+	// Planning issue must NOT be claimed (released)
+	if orch.state.IsClaimed(1) {
+		t.Error("planning issue should be released after agent exits")
+	}
+
+	// Planning entry must still exist
+	if !orch.state.IsPlanning(1) {
+		t.Error("planning entry should still exist after agent exits")
+	}
+}
+
 func TestPlanningFullLifecycle(t *testing.T) {
 	cfg := &config.Config{
 		GitHub: config.GitHubConfig{

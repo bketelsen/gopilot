@@ -365,7 +365,11 @@ func (o *Orchestrator) monitorAgent(issue domain.Issue, sess *agent.Session, ent
 	if sess.ExitCode == 0 {
 		log.Info("agent completed successfully")
 		o.metrics.Increment("issues_completed")
-		o.state.MarkCompleted(issue.ID)
+
+		// Don't mark planning issues as fully completed — they need multi-turn dispatch
+		if !o.state.IsPlanning(issue.ID) {
+			o.state.MarkCompleted(issue.ID)
+		}
 		o.state.Release(issue.ID)
 	} else {
 		log.Warn("agent exited with error", "exit_code", sess.ExitCode, "error", sess.ExitErr)

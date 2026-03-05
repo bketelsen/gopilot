@@ -183,6 +183,31 @@ func TestRateLimitParsing(t *testing.T) {
 	}
 }
 
+func TestRemoveLabelURLEncoding(t *testing.T) {
+	var receivedURI string
+	mux := http.NewServeMux()
+	mux.HandleFunc("DELETE /repos/owner/repo/issues/1/labels/", func(w http.ResponseWriter, r *http.Request) {
+		receivedURI = r.RequestURI
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`[]`))
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	cfg := config.GitHubConfig{Token: "test-token", Repos: []string{"owner/repo"}}
+	client := NewRESTClient(cfg, server.URL+"/")
+
+	// Test with a label that contains characters requiring URL encoding (space, hash)
+	err := client.RemoveLabel(context.Background(), "owner/repo", 1, "needs review #2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "/repos/owner/repo/issues/1/labels/needs%20review%20%232"
+	if receivedURI != want {
+		t.Errorf("received URI = %q, want %q", receivedURI, want)
+	}
+}
+
 func TestAddSubIssue(t *testing.T) {
 	var called bool
 	mux := http.NewServeMux()

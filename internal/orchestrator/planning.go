@@ -70,7 +70,9 @@ func (o *Orchestrator) processPlanningIssues(ctx context.Context, issues []domai
 			if entry.Phase == PlanningPhaseAwaitingReply || entry.Phase == PlanningPhasePlanProposed || entry.Phase == PlanningPhaseAwaitingApproval {
 				hasNew, lastID := hasNewHumanComment(o.github, ctx, issue.Repo, issue.ID, entry.LastCommentID)
 				if hasNew {
-					entry.LastCommentID = lastID
+					o.state.UpdatePlanning(issue.ID, func(e *PlanningEntry) {
+						e.LastCommentID = lastID
+					})
 					if o.sseHub != nil {
 						o.sseHub.Broadcast("planning:reply_detected", fmt.Sprintf(`{"issue_id":%d}`, issue.ID))
 					}
@@ -138,6 +140,7 @@ func (o *Orchestrator) dispatchPlanningAgent(ctx context.Context, issue domain.I
 		Model:            model,
 		MaxContinuations: o.cfg.Agent.MaxAutopilotContinues,
 	}
+	// Planning agents don't need a workspace — they interact via GitHub comments only.
 	sess, err := runner.Start(ctx, "", rendered, opts)
 	if err != nil {
 		log.Error("planning agent start failed", "error", err)
@@ -160,8 +163,10 @@ func (o *Orchestrator) dispatchPlanningAgent(ctx context.Context, issue domain.I
 	}
 	o.state.AddRunning(issue.ID, runEntry)
 
-	entry.Phase = PlanningPhaseAwaitingReply
-	entry.QuestionsAsked++
+	o.state.UpdatePlanning(issue.ID, func(e *PlanningEntry) {
+		e.Phase = PlanningPhaseAwaitingReply
+		e.QuestionsAsked++
+	})
 
 	log.Info("planning agent dispatched", "session_id", sess.ID)
 	if o.sseHub != nil {

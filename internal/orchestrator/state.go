@@ -188,6 +188,14 @@ func (s *State) RemovePlanning(issueID int) {
 	delete(s.planning, issueID)
 }
 
+func (s *State) UpdatePlanning(issueID int, fn func(*PlanningEntry)) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if entry, ok := s.planning[issueID]; ok {
+		fn(entry)
+	}
+}
+
 func (s *State) IsPlanning(issueID int) bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

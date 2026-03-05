@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	neturl "net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -262,7 +263,7 @@ func (c *RESTClient) FetchIssueComments(ctx context.Context, repo string, id int
 	if len(parts) != 2 {
 		return nil, fmt.Errorf("invalid repo: %s", repo)
 	}
-	url := fmt.Sprintf("%srepos/%s/%s/issues/%d/comments", c.baseURL, parts[0], parts[1], id)
+	url := fmt.Sprintf("%srepos/%s/%s/issues/%d/comments?per_page=100", c.baseURL, parts[0], parts[1], id)
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return nil, err
@@ -305,7 +306,7 @@ func (c *RESTClient) RemoveLabel(ctx context.Context, repo string, id int, label
 	if len(parts) != 2 {
 		return fmt.Errorf("invalid repo: %s", repo)
 	}
-	url := fmt.Sprintf("%srepos/%s/%s/issues/%d/labels/%s", c.baseURL, parts[0], parts[1], id, label)
+	url := fmt.Sprintf("%srepos/%s/%s/issues/%d/labels/%s", c.baseURL, parts[0], parts[1], id, neturl.PathEscape(label))
 	req, err := http.NewRequestWithContext(ctx, "DELETE", url, nil)
 	if err != nil {
 		return err
