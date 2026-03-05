@@ -207,6 +207,19 @@ type TokenTotals struct {
 	CostEstimate   float64 // estimated USD
 }
 
+// PlanningEntry tracks the state of an interactive planning session for display.
+type PlanningEntry struct {
+	IssueID        int
+	Repo           string
+	Phase          string
+	QuestionsAsked int
+}
+
+// Identifier returns the "owner/repo#N" string for the planning entry.
+func (p PlanningEntry) Identifier() string {
+	return fmt.Sprintf("%s#%d", p.Repo, p.IssueID)
+}
+
 // AgentEvent represents an event from a running agent.
 type AgentEvent struct {
 	Type      string // agent_started, agent_output, agent_completed, agent_failed, agent_timeout

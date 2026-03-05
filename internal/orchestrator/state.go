@@ -210,3 +210,34 @@ func (s *State) AllPlanning() []*PlanningEntry {
 	}
 	return entries
 }
+
+// StatePlanningAdapter wraps State to satisfy web.PlanningProvider.
+type StatePlanningAdapter struct {
+	State *State
+}
+
+// AllPlanning returns planning entries as domain types.
+func (a *StatePlanningAdapter) AllPlanning() []*domain.PlanningEntry {
+	return a.State.AllDomainPlanning()
+}
+
+// PlanningCount returns the number of active planning sessions.
+func (a *StatePlanningAdapter) PlanningCount() int {
+	return a.State.PlanningCount()
+}
+
+// AllDomainPlanning returns planning entries as domain types for the web layer.
+func (s *State) AllDomainPlanning() []*domain.PlanningEntry {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	entries := make([]*domain.PlanningEntry, 0, len(s.planning))
+	for _, e := range s.planning {
+		entries = append(entries, &domain.PlanningEntry{
+			IssueID:        e.IssueID,
+			Repo:           e.Repo,
+			Phase:          string(e.Phase),
+			QuestionsAsked: e.QuestionsAsked,
+		})
+	}
+	return entries
+}

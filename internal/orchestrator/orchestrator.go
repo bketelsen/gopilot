@@ -98,7 +98,7 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 	}
 
 	if o.cfg.Dashboard.Enabled {
-		webSrv := web.NewServer(o.state, o.cfg, o.metrics, o.retryQueue)
+		webSrv := web.NewServer(o.state, o.cfg, o.metrics, o.retryQueue, &StatePlanningAdapter{State: o.state})
 		o.sseHub = webSrv.SSEHub()
 		webSrv.SetRefreshFunc(func() {
 			go o.Tick(ctx)

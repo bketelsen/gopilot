@@ -7,12 +7,13 @@ import (
 	"github.com/bketelsen/gopilot/internal/web/templates/layouts"
 )
 
-templ Dashboard(running []*domain.RunEntry, retries []*domain.RetryEntry, metrics map[string]int64, maxAgents int) {
+templ Dashboard(running []*domain.RunEntry, retries []*domain.RetryEntry, planning []*domain.PlanningEntry, metrics map[string]int64, maxAgents int) {
 	@layouts.Base("Dashboard") {
 		<div hx-ext="sse" sse-connect="/api/v1/events" sse-swap="agent-update">
 			<!-- Summary Cards -->
-			<div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6" id="summary-cards">
+			<div class="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6" id="summary-cards">
 				@SummaryCard("Active Agents", fmt.Sprintf("%d / %d", len(running), maxAgents))
+				@SummaryCard("Planning", fmt.Sprintf("%d", len(planning)))
 				@SummaryCard("Dispatched", fmt.Sprintf("%d", metrics["issues_dispatched"]))
 				@SummaryCard("Completed", fmt.Sprintf("%d", metrics["issues_completed"]))
 				@SummaryCard("Failed", fmt.Sprintf("%d", metrics["issues_failed"]))
@@ -55,6 +56,48 @@ templ Dashboard(running []*domain.RunEntry, retries []*domain.RetryEntry, metric
 									<td class="px-4 py-2">{ FormatDuration(entry.Duration()) }</td>
 									<td class="px-4 py-2">{ fmt.Sprintf("%d", entry.Attempt) }</td>
 									<td class="px-4 py-2">{ entry.LastEventAt.Format("15:04:05") }</td>
+								</tr>
+							}
+						</tbody>
+					</table>
+				</div>
+			</div>
+
+			<!-- Planning Sessions Table -->
+			<div class="bg-white dark:bg-gray-800 rounded-lg shadow mb-6">
+				<div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+					<h2 class="text-lg font-semibold">Planning Sessions</h2>
+				</div>
+				<div class="overflow-x-auto">
+					<table class="w-full text-sm">
+						<thead class="bg-gray-50 dark:bg-gray-700">
+							<tr>
+								<th class="px-4 py-2 text-left">Issue</th>
+								<th class="px-4 py-2 text-left">Repo</th>
+								<th class="px-4 py-2 text-left">Status</th>
+								<th class="px-4 py-2 text-left">Phase</th>
+								<th class="px-4 py-2 text-left">Questions Asked</th>
+							</tr>
+						</thead>
+						<tbody>
+							if len(planning) == 0 {
+								<tr>
+									<td colspan="5" class="px-4 py-8 text-center text-gray-500">No active planning sessions</td>
+								</tr>
+							}
+							for _, entry := range planning {
+								<tr class="border-t border-gray-200 dark:border-gray-700">
+									<td class="px-4 py-2">
+										<a href={ templ.SafeURL(fmt.Sprintf("/issues/%s/%d", entry.Repo, entry.IssueID)) } class="text-blue-500 hover:underline">
+											{ entry.Identifier() }
+										</a>
+									</td>
+									<td class="px-4 py-2">{ entry.Repo }</td>
+									<td class="px-4 py-2">
+										<span class="px-2 py-1 text-xs font-medium rounded-full bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200">Planning</span>
+									</td>
+									<td class="px-4 py-2">{ entry.Phase }</td>
+									<td class="px-4 py-2">{ fmt.Sprintf("%d", entry.QuestionsAsked) }</td>
 								</tr>
 							}
 						</tbody>
