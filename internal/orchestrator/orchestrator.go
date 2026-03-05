@@ -383,6 +383,10 @@ func (o *Orchestrator) handleMaxRetriesExceeded(issue domain.Issue, lastError st
 	o.metrics.Increment("issues_failed")
 	o.state.Release(issue.ID)
 
+	if err := o.github.SetProjectStatus(context.Background(), issue, "Todo"); err != nil {
+		log.Warn("failed to reset status to Todo", "error", err)
+	}
+
 	comment := fmt.Sprintf("Gopilot failed after %d attempts. Last error: %s", o.cfg.Agent.MaxRetries, lastError)
 	o.github.AddComment(context.Background(), issue.Repo, issue.ID, comment)
 	o.github.AddLabel(context.Background(), issue.Repo, issue.ID, "gopilot-failed")
