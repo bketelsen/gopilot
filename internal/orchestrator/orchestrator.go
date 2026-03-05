@@ -96,7 +96,7 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 	}
 
 	if o.cfg.Dashboard.Enabled {
-		webSrv := web.NewServer(o.state, o.cfg, o.metrics)
+		webSrv := web.NewServer(o.state, o.cfg, o.metrics, o.retryQueue)
 		o.sseHub = webSrv.SSEHub()
 		go func() {
 			slog.Info("dashboard starting", "addr", o.cfg.Dashboard.Addr)

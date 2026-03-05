@@ -14,11 +14,18 @@ import (
 // StateProvider abstracts access to orchestrator state to avoid circular imports.
 type StateProvider interface {
 	AllRunning() []*domain.RunEntry
+	RunningCount() int
 }
 
 // MetricsProvider abstracts access to metrics counters.
 type MetricsProvider interface {
 	All() map[string]int64
+}
+
+// RetryProvider abstracts access to the retry queue.
+type RetryProvider interface {
+	All() []*domain.RetryEntry
+	Len() int
 }
 
 type Server struct {
@@ -27,14 +34,16 @@ type Server struct {
 	cfg     *config.Config
 	sseHub  *SSEHub
 	metrics MetricsProvider
+	retries RetryProvider
 }
 
-func NewServer(state StateProvider, cfg *config.Config, metrics MetricsProvider) *Server {
+func NewServer(state StateProvider, cfg *config.Config, metrics MetricsProvider, retries RetryProvider) *Server {
 	s := &Server{
 		state:   state,
 		cfg:     cfg,
 		sseHub:  NewSSEHub(),
 		metrics: metrics,
+		retries: retries,
 	}
 	s.router = s.buildRouter()
 	return s
