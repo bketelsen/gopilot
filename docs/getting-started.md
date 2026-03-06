@@ -77,6 +77,25 @@ dashboard:
 
 Replace `owner/repo` with your actual repository and make sure `GITHUB_TOKEN` is set in your environment.
 
+## Set Up Repository Labels
+
+Gopilot uses specific GitHub labels to identify eligible issues, plan work, and track failures. Run the setup command to create these labels on all your configured repositories:
+
+```bash
+gopilot setup
+```
+
+This creates the following labels (or updates them if they already exist):
+
+| Label | Color | Purpose |
+|-------|-------|---------|
+| `gopilot` | Blue | Marks issues as eligible for agent dispatch |
+| `gopilot:plan` | Purple | Triggers interactive planning mode |
+| `gopilot:planned` | Green | Applied when planning completes |
+| `gopilot-failed` | Red | Applied when an agent fails after max retries |
+
+The command is idempotent — safe to run multiple times.
+
 ## First Run
 
 Start with a dry run to verify that Gopilot can connect to GitHub and find eligible issues without actually dispatching any agents:

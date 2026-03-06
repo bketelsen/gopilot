@@ -35,12 +35,15 @@ Initialize a configuration file and start the orchestrator:
 
 ```bash
 gopilot init
+# Edit gopilot.yaml with your token and repos
+gopilot setup
 gopilot
 ```
 
 The `init` command creates a `gopilot.yaml` in the current directory with
 sensible defaults. Edit it to add your GitHub token, target repositories,
-and preferred agent settings, then run `gopilot` to start the orchestrator.
+and preferred agent settings. Run `gopilot setup` to create the required
+labels on your repos, then run `gopilot` to start the orchestrator.
 
 ## Building from Source
 
