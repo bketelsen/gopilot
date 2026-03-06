@@ -34,6 +34,18 @@ func TestClaudeBuildArgsReadOnly(t *testing.T) {
 	}
 }
 
+func TestClaudeBuildArgsStreamJSON(t *testing.T) {
+	runner := &ClaudeRunner{Command: "claude"}
+	args := runner.buildArgs("/tmp/ws/.gopilot-prompt.md", AgentOpts{})
+	joined := strings.Join(args, " ")
+	if !strings.Contains(joined, "--output-format stream-json") {
+		t.Error("missing --output-format stream-json flag")
+	}
+	if !strings.Contains(joined, "--verbose") {
+		t.Error("missing --verbose flag")
+	}
+}
+
 func TestClaudeName(t *testing.T) {
 	runner := &ClaudeRunner{Command: "claude"}
 	if runner.Name() != "claude" {
