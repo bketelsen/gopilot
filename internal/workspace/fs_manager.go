@@ -98,10 +98,14 @@ func (m *FSManager) runHook(ctx context.Context, script string, dir string, issu
 }
 
 func expandHookVars(script string, issue domain.Issue, workspace string) string {
+	branch := fmt.Sprintf("gopilot/issue-%d", issue.ID)
+	if issue.Branch != "" {
+		branch = issue.Branch
+	}
 	r := strings.NewReplacer(
 		"{{repo}}", issue.Repo,
 		"{{issue_id}}", fmt.Sprintf("%d", issue.ID),
-		"{{branch}}", fmt.Sprintf("gopilot/issue-%d", issue.ID),
+		"{{branch}}", branch,
 		"{{workspace}}", workspace,
 	)
 	return r.Replace(script)

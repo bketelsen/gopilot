@@ -77,6 +77,24 @@ func TestFSManagerCleanup(t *testing.T) {
 	}
 }
 
+func TestExpandHookVarsBranchOverride(t *testing.T) {
+	issue := domain.Issue{ID: 42, Repo: "owner/repo", Branch: "feature/my-pr-branch"}
+	got := expandHookVars("checkout {{branch}}", issue, "/tmp/ws")
+	want := "checkout feature/my-pr-branch"
+	if got != want {
+		t.Errorf("expandHookVars() = %q, want %q", got, want)
+	}
+}
+
+func TestExpandHookVarsBranchDefault(t *testing.T) {
+	issue := domain.Issue{ID: 42, Repo: "owner/repo"}
+	got := expandHookVars("checkout {{branch}}", issue, "/tmp/ws")
+	want := "checkout gopilot/issue-42"
+	if got != want {
+		t.Errorf("expandHookVars() = %q, want %q", got, want)
+	}
+}
+
 func TestFSManagerHookExpansion(t *testing.T) {
 	root := t.TempDir()
 	cfg := config.WorkspaceConfig{
