@@ -55,9 +55,13 @@ Once an eligible issue is found:
 
 On each poll cycle, the orchestrator checks all running agents against current issue state. Agents whose issues have been closed, reassigned, or had their eligible labels removed are stopped and their workspaces cleaned up.
 
+### Agent Output Capture
+
+Agent stdout is captured via `io.Pipe` and scanned line by line. Each line updates the `RunEntry` fields (`LastMessage`, `LastEventAt`, `TurnCount`) thread-safely and is stored in a `RingBuffer` (last 50 lines). Per-issue SSE events (`agent-output-{id}`) are broadcast with HTML fragments so the dashboard can stream output in real time.
+
 ### Stall Detection
 
-The orchestrator monitors agent event output continuously. If an agent has not emitted any events within `stall_timeout_ms`, it is considered stalled and its process is killed. This prevents agents from hanging indefinitely on stuck operations.
+The orchestrator monitors agent output continuously. If an agent has not emitted any stdout within `stall_timeout_ms`, it is considered stalled and its process is killed. Because `LastEventAt` is now updated on every output line, stall detection correctly resets whenever the agent is actively producing output.
 
 ### Retry
 
@@ -111,6 +115,6 @@ The following settings require a full restart to take effect:
 | `internal/metrics/` | Token tracking and cost estimation |
 | `internal/config/` | YAML config structs, loader, fsnotify watcher |
 | `internal/planning/` | Dashboard-based interactive planning sessions (WebSocket chat, plan parser) |
-| `internal/domain/` | Core types: Issue, RunEntry, CompletedRun, AgentEvent |
+| `internal/domain/` | Core types: Issue, RunEntry, CompletedRun, AgentEvent, RingBuffer |
 | `components/` | Reusable templ UI components (button, card, dialog, etc.) |
 | `skills/` | Runtime skill definitions (SKILL.md files) |

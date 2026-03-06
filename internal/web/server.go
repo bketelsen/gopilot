@@ -203,10 +203,16 @@ func (s *Server) handleIssueDetailAPI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_ = owner + "/" + repo
+	running := s.state.GetRunning(id)
+	var outputLines []string
+	if running != nil && running.OutputBuffer != nil {
+		outputLines = running.OutputBuffer.Lines()
+	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{
-		"running": s.state.GetRunning(id),
+		"running": running,
 		"history": s.state.GetHistory(id),
+		"output":  outputLines,
 	})
 }
 

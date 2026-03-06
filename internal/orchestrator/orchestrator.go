@@ -1,9 +1,11 @@
 package orchestrator
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -349,13 +351,16 @@ func (o *Orchestrator) dispatch(ctx context.Context, issue domain.Issue, attempt
 		return
 	}
 
+	pr, pw := io.Pipe()
 	opts := agent.AgentOpts{
 		Model:            o.cfg.Agent.Model,
 		MaxContinuations: o.cfg.Agent.MaxAutopilotContinues,
+		Stdout:           pw,
 	}
 	sess, err := runner.Start(ctx, wsPath, rendered, opts)
 	if err != nil {
 		log.Error("agent start failed", "error", err)
+		pw.Close()
 		o.state.Release(issue.ID)
 		return
 	}
@@ -367,14 +372,17 @@ func (o *Orchestrator) dispatch(ctx context.Context, issue domain.Issue, attempt
 
 	now := time.Now()
 	entry := &domain.RunEntry{
-		Issue:       issue,
-		SessionID:   sess.ID,
-		ProcessPID:  sess.PID,
-		StartedAt:   now,
-		LastEventAt: now,
-		Attempt:     attempt,
+		Issue:        issue,
+		SessionID:    sess.ID,
+		ProcessPID:   sess.PID,
+		StartedAt:    now,
+		LastEventAt:  now,
+		Attempt:      attempt,
+		OutputBuffer: domain.NewRingBuffer(50),
 	}
 	o.state.AddRunning(issue.ID, entry)
+
+	go o.scanOutput(pr, entry)
 
 	log.Info("agent dispatched",
 		"session_id", sess.ID,
@@ -382,11 +390,27 @@ func (o *Orchestrator) dispatch(ctx context.Context, issue domain.Issue, attempt
 		"workspace", wsPath,
 	)
 
-	go o.monitorAgent(issue, sess, entry)
+	go o.monitorAgent(issue, sess, entry, pw)
 }
 
-func (o *Orchestrator) monitorAgent(issue domain.Issue, sess *agent.Session, entry *domain.RunEntry) {
+// scanOutput reads agent stdout line by line, updating RunEntry fields and broadcasting SSE events.
+func (o *Orchestrator) scanOutput(pr *io.PipeReader, entry *domain.RunEntry) {
+	scanner := bufio.NewScanner(pr)
+	for scanner.Scan() {
+		line := scanner.Text()
+		entry.RecordOutput(line, time.Now())
+
+		if o.sseHub != nil {
+			eventName := fmt.Sprintf("agent-output-%d", entry.Issue.ID)
+			o.sseHub.Broadcast(eventName, "<div>"+line+"</div>")
+		}
+	}
+	pr.Close()
+}
+
+func (o *Orchestrator) monitorAgent(issue domain.Issue, sess *agent.Session, entry *domain.RunEntry, pw *io.PipeWriter) {
 	<-sess.Done
+	pw.Close() // Close pipe writer to unblock scanOutput
 
 	log := slog.With("issue", issue.Identifier(), "session_id", sess.ID)
 

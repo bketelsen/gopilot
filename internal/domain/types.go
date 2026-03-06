@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -213,25 +214,55 @@ func SortCommentsByTime(comments []Comment) {
 
 // RunEntry tracks an active agent session.
 type RunEntry struct {
-	Issue       Issue
-	SessionID   string
-	ProcessPID  int
-	StartedAt   time.Time
-	LastEventAt time.Time
-	LastEvent   string
-	LastMessage string
-	TurnCount   int
-	Attempt     int
-	Tokens      TokenCounts
+	mu           sync.RWMutex `json:"-"`
+	Issue        Issue
+	SessionID    string
+	ProcessPID   int
+	StartedAt    time.Time
+	LastEventAt  time.Time
+	LastEvent    string
+	LastMessage  string
+	TurnCount    int
+	Attempt      int
+	Tokens       TokenCounts
+	OutputBuffer *RingBuffer `json:"-"` // last N lines of agent stdout
+}
+
+// RecordOutput updates output-related fields thread-safely.
+func (r *RunEntry) RecordOutput(line string, t time.Time) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.LastMessage = line
+	r.LastEventAt = t
+	r.TurnCount++
+	if r.OutputBuffer != nil {
+		r.OutputBuffer.Add(line)
+	}
+}
+
+// GetLastMessage returns the last output message thread-safely.
+func (r *RunEntry) GetLastMessage() string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.LastMessage
+}
+
+// GetTurnCount returns the turn count thread-safely.
+func (r *RunEntry) GetTurnCount() int {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.TurnCount
 }
 
 // Duration returns time since the agent started.
-func (r RunEntry) Duration() time.Duration {
+func (r *RunEntry) Duration() time.Duration {
 	return time.Since(r.StartedAt)
 }
 
 // IsStalled returns true if no events received within the timeout.
-func (r RunEntry) IsStalled(timeout time.Duration) bool {
+func (r *RunEntry) IsStalled(timeout time.Duration) bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	return time.Since(r.LastEventAt) > timeout
 }
 
