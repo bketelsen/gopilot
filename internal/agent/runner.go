@@ -1,6 +1,9 @@
 package agent
 
-import "context"
+import (
+	"context"
+	"io"
+)
 
 // Session represents a running agent subprocess.
 type Session struct {
@@ -17,6 +20,7 @@ type AgentOpts struct {
 	Model            string
 	MaxContinuations int
 	Env              []string
+	Stdout           io.Writer
 }
 
 // Runner launches and manages agent subprocesses.

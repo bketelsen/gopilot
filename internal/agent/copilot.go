@@ -27,7 +27,11 @@ func (r *CopilotRunner) Start(ctx context.Context, workspace string, prompt stri
 	procCtx, cancel := context.WithCancel(ctx)
 	cmd := exec.CommandContext(procCtx, r.Command, args...)
 	cmd.Dir = workspace
-	cmd.Stdout = os.Stderr
+	if opts.Stdout != nil {
+		cmd.Stdout = opts.Stdout
+	} else {
+		cmd.Stdout = os.Stderr
+	}
 	cmd.Stderr = os.Stderr
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
