@@ -34,9 +34,32 @@ type Issue struct {
 	Iteration string // Sprint/iteration name
 	Effort    int    // Story points
 
+	// Pull requests
+	LinkedPRs []PullRequest // Pull requests linked to this issue
+
 	// Timestamps
 	CreatedAt time.Time
 	UpdatedAt time.Time
+}
+
+// HasOpenPR returns true if the issue has at least one open (not yet merged) pull request.
+func (i Issue) HasOpenPR() bool {
+	for _, pr := range i.LinkedPRs {
+		if pr.State == "open" {
+			return true
+		}
+	}
+	return false
+}
+
+// HasMergedPR returns true if the issue has at least one merged pull request.
+func (i Issue) HasMergedPR() bool {
+	for _, pr := range i.LinkedPRs {
+		if pr.Merged {
+			return true
+		}
+	}
+	return false
 }
 
 // Identifier returns the "owner/repo#N" string for logging.
@@ -129,6 +152,15 @@ type Comment struct {
 	Author    string
 	Body      string
 	CreatedAt time.Time
+}
+
+// PullRequest represents a GitHub pull request linked to an issue.
+type PullRequest struct {
+	Number int
+	Title  string
+	State  string // "open", "closed"
+	Merged bool
+	URL    string
 }
 
 // SortCommentsByTime sorts comments by creation time (oldest first).

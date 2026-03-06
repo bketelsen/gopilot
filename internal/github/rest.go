@@ -527,15 +527,16 @@ func (c *RESTClient) UpdateRepoLabel(ctx context.Context, repo, name, color, des
 
 // ghIssue is the raw GitHub API response shape.
 type ghIssue struct {
-	Number    int       `json:"number"`
-	NodeID    string    `json:"node_id"`
-	Title     string    `json:"title"`
-	Body      string    `json:"body"`
-	State     string    `json:"state"`
-	HTMLURL   string    `json:"html_url"`
-	Labels    []ghLabel `json:"labels"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	Number      int       `json:"number"`
+	NodeID      string    `json:"node_id"`
+	Title       string    `json:"title"`
+	Body        string    `json:"body"`
+	State       string    `json:"state"`
+	HTMLURL     string    `json:"html_url"`
+	Labels      []ghLabel `json:"labels"`
+	PullRequest *struct{} `json:"pull_request,omitempty"` // non-nil means this is a PR
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }
 
 type ghLabel struct {
@@ -547,6 +548,10 @@ func (g ghIssue) toDomain(repo string) domain.Issue {
 	for i, l := range g.Labels {
 		labels[i] = l.Name
 	}
+	status := "Todo"
+	if g.State == "closed" {
+		status = "Done"
+	}
 	return domain.Issue{
 		ID:        g.Number,
 		NodeID:    g.NodeID,
@@ -555,10 +560,145 @@ func (g ghIssue) toDomain(repo string) domain.Issue {
 		Title:     g.Title,
 		Body:      g.Body,
 		Labels:    normalizeLabels(labels),
-		Status:    "Todo",
+		Status:    status,
 		CreatedAt: g.CreatedAt,
 		UpdatedAt: g.UpdatedAt,
 	}
+}
+
+// FetchLabeledIssues returns all issues (open and recently closed) with the given label
+// across all configured repos. Pull requests are excluded.
+func (c *RESTClient) FetchLabeledIssues(ctx context.Context, label string) ([]domain.Issue, error) {
+	var all []domain.Issue
+	for _, repo := range c.cfg.Repos {
+		for _, state := range []string{"open", "closed"} {
+			issues, err := c.fetchLabeledRepoIssues(ctx, repo, label, state)
+			if err != nil {
+				return nil, fmt.Errorf("fetching %s %s issues from %s: %w", state, label, repo, err)
+			}
+			all = append(all, issues...)
+		}
+	}
+	return all, nil
+}
+
+func (c *RESTClient) fetchLabeledRepoIssues(ctx context.Context, repo, label, state string) ([]domain.Issue, error) {
+	parts := strings.SplitN(repo, "/", 2)
+	if len(parts) != 2 {
+		return nil, fmt.Errorf("invalid repo format: %s", repo)
+	}
+	owner, name := parts[0], parts[1]
+
+	url := fmt.Sprintf("%srepos/%s/%s/issues?state=%s&labels=%s&per_page=100",
+		c.baseURL, owner, name, neturl.QueryEscape(state), neturl.QueryEscape(label))
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("fetch labeled issues for %s: %w", repo, err)
+	}
+	req.Header.Set("Authorization", "token "+c.cfg.Token)
+	req.Header.Set("Accept", "application/vnd.github+json")
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("fetch labeled issues for %s: %w", repo, err)
+	}
+	defer resp.Body.Close()
+	c.updateRateLimit(resp)
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("GitHub API error %d: %s", resp.StatusCode, body)
+	}
+
+	var raw []ghIssue
+	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
+		return nil, fmt.Errorf("decoding issues: %w", err)
+	}
+
+	var issues []domain.Issue
+	for _, r := range raw {
+		if r.PullRequest != nil {
+			continue // skip PRs (GitHub lists PRs as issues)
+		}
+		issues = append(issues, r.toDomain(repo))
+	}
+	return issues, nil
+}
+
+// ghTimelineEvent represents a timeline event from the GitHub API.
+type ghTimelineEvent struct {
+	Event  string `json:"event"`
+	Source struct {
+		Issue struct {
+			Number      int    `json:"number"`
+			Title       string `json:"title"`
+			State       string `json:"state"`
+			HTMLURL     string `json:"html_url"`
+			PullRequest *struct {
+				MergedAt *time.Time `json:"merged_at"`
+			} `json:"pull_request"`
+		} `json:"issue"`
+	} `json:"source"`
+}
+
+// FetchLinkedPullRequests returns pull requests linked to the given issue
+// by looking at timeline cross-reference events.
+func (c *RESTClient) FetchLinkedPullRequests(ctx context.Context, repo string, issueNumber int) ([]domain.PullRequest, error) {
+	parts := strings.SplitN(repo, "/", 2)
+	if len(parts) != 2 {
+		return nil, fmt.Errorf("invalid repo: %s", repo)
+	}
+	url := fmt.Sprintf("%srepos/%s/%s/issues/%d/timeline?per_page=100",
+		c.baseURL, parts[0], parts[1], issueNumber)
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("fetch linked PRs for %s#%d: %w", repo, issueNumber, err)
+	}
+	req.Header.Set("Authorization", "token "+c.cfg.Token)
+	req.Header.Set("Accept", "application/vnd.github+json")
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("fetch linked PRs for %s#%d: %w", repo, issueNumber, err)
+	}
+	defer resp.Body.Close()
+	c.updateRateLimit(resp)
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("fetch linked PRs for %s#%d: GitHub API error %d: %s", repo, issueNumber, resp.StatusCode, body)
+	}
+
+	var events []ghTimelineEvent
+	if err := json.NewDecoder(resp.Body).Decode(&events); err != nil {
+		return nil, fmt.Errorf("decoding timeline for %s#%d: %w", repo, issueNumber, err)
+	}
+
+	seen := map[int]bool{}
+	var prs []domain.PullRequest
+	for _, ev := range events {
+		if ev.Event != "cross-referenced" {
+			continue
+		}
+		src := ev.Source.Issue
+		if src.PullRequest == nil {
+			continue // not a PR
+		}
+		if seen[src.Number] {
+			continue
+		}
+		seen[src.Number] = true
+
+		merged := src.PullRequest.MergedAt != nil
+		prs = append(prs, domain.PullRequest{
+			Number: src.Number,
+			Title:  src.Title,
+			State:  src.State,
+			Merged: merged,
+			URL:    src.HTMLURL,
+		})
+	}
+	return prs, nil
 }
 
 // Ensure RESTClient satisfies the Client interface at compile time.

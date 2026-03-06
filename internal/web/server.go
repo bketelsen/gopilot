@@ -1,7 +1,9 @@
 package web
 
 import (
+	"context"
 	"encoding/json"
+	"log"
 	"net/http"
 	"os/exec"
 	"strconv"
@@ -40,6 +42,12 @@ type PlanningProvider interface {
 	PlanningCount() int
 }
 
+// SprintProvider abstracts access to sprint/issue data from GitHub.
+type SprintProvider interface {
+	FetchLabeledIssues(ctx context.Context, label string) ([]domain.Issue, error)
+	FetchLinkedPullRequests(ctx context.Context, repo string, issueNumber int) ([]domain.PullRequest, error)
+}
+
 // Server is the web dashboard HTTP server.
 type Server struct {
 	router         chi.Router
@@ -49,6 +57,7 @@ type Server struct {
 	metrics        MetricsProvider
 	retries        RetryProvider
 	planning       PlanningProvider
+	sprint         SprintProvider
 	planningMgr    *planning.Manager
 	triggerRefresh func()
 }
@@ -200,41 +209,88 @@ func (s *Server) handleIssueDetailAPI(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleSprintPage(w http.ResponseWriter, r *http.Request) {
-	running := s.state.AllRunning()
+	data := s.buildSprintData(r.Context())
+	component := pages.Sprint(data)
+	component.Render(r.Context(), w)
+}
+
+// buildSprintData assembles sprint board data from all available sources.
+func (s *Server) buildSprintData(ctx context.Context) pages.SprintData {
 	byStatus := map[string][]domain.Issue{
 		"Todo": {}, "In Progress": {}, "In Review": {}, "Done": {},
 	}
 	iteration := ""
+
+	// Build a set of running issue IDs for quick lookup
+	running := s.state.AllRunning()
+	runningIDs := make(map[int]bool, len(running))
 	for _, entry := range running {
-		status := entry.Issue.Status
-		if _, ok := byStatus[status]; !ok {
-			status = "In Progress"
-		}
-		byStatus[status] = append(byStatus[status], entry.Issue)
+		runningIDs[entry.Issue.ID] = true
 		if entry.Issue.Iteration != "" {
 			iteration = entry.Issue.Iteration
 		}
 	}
+
+	if s.sprint != nil && s.cfg != nil && len(s.cfg.GitHub.EligibleLabels) > 0 {
+		label := s.cfg.GitHub.EligibleLabels[0]
+		allIssues, err := s.sprint.FetchLabeledIssues(ctx, label)
+		if err != nil {
+			log.Printf("sprint: failed to fetch labeled issues: %v", err)
+		} else {
+			// Enrich issues with linked PR data and categorize
+			for _, issue := range allIssues {
+				prs, err := s.sprint.FetchLinkedPullRequests(ctx, issue.Repo, issue.ID)
+				if err != nil {
+					log.Printf("sprint: failed to fetch PRs for %s#%d: %v", issue.Repo, issue.ID, err)
+				}
+				issue.LinkedPRs = prs
+
+				switch {
+				case issue.HasMergedPR():
+					byStatus["Done"] = append(byStatus["Done"], issue)
+				case issue.HasOpenPR():
+					byStatus["In Review"] = append(byStatus["In Review"], issue)
+				case runningIDs[issue.ID]:
+					byStatus["In Progress"] = append(byStatus["In Progress"], issue)
+				case issue.Status == "Done":
+					byStatus["Done"] = append(byStatus["Done"], issue)
+				default:
+					byStatus["Todo"] = append(byStatus["Todo"], issue)
+				}
+
+				if issue.Iteration != "" {
+					iteration = issue.Iteration
+				}
+			}
+		}
+	} else {
+		// Fallback: use only running agents (legacy behavior)
+		for _, entry := range running {
+			byStatus["In Progress"] = append(byStatus["In Progress"], entry.Issue)
+		}
+	}
+
 	total := 0
 	for _, issues := range byStatus {
 		total += len(issues)
 	}
-	data := pages.SprintData{
+
+	return pages.SprintData{
 		Iteration: iteration,
 		ByStatus:  byStatus,
 		Total:     total,
 		Done:      len(byStatus["Done"]),
 	}
-	component := pages.Sprint(data)
-	component.Render(r.Context(), w)
 }
 
 func (s *Server) handleSprintAPI(w http.ResponseWriter, r *http.Request) {
-	running := s.state.AllRunning()
+	data := s.buildSprintData(r.Context())
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{
-		"running_count": len(running),
-		"running":       running,
+		"iteration": data.Iteration,
+		"by_status": data.ByStatus,
+		"total":     data.Total,
+		"done":      data.Done,
 	})
 }
 
@@ -288,6 +344,11 @@ func (s *Server) handlePlanningChatPage(w http.ResponseWriter, r *http.Request) 
 func isCommandAvailable(name string) bool {
 	_, err := exec.LookPath(name)
 	return err == nil
+}
+
+// SetSprintProvider configures the data source for the sprint view.
+func (s *Server) SetSprintProvider(sp SprintProvider) {
+	s.sprint = sp
 }
 
 // SetRefreshFunc sets the callback invoked by POST /api/v1/refresh.

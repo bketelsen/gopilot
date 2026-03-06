@@ -67,12 +67,13 @@ Failed agents enter a retry queue with exponential backoff. Each subsequent retr
 
 | Interface | Description |
 |-----------|-------------|
-| `github.Client` | GitHub REST and GraphQL operations including issue management, label manipulation, PR creation, and rate limit tracking. |
+| `github.Client` | GitHub REST and GraphQL operations including issue management, label manipulation, PR tracking, and rate limit tracking. Includes `FetchLabeledIssues` for sprint views and `FetchLinkedPullRequests` for PR status detection. |
 | `workspace.Manager` | Workspace lifecycle management (create and remove directories) plus hook execution with variable interpolation. Implemented by `FSManager`. |
 | `agent.Runner` | Agent launcher interface. `CopilotRunner` and `ClaudeRunner` implement this for their respective CLI tools, handling subprocess creation, output streaming, and termination. |
 | `web.StateProvider` | Provides current agent state to the dashboard without creating circular imports between orchestrator and web packages. |
 | `web.MetricsProvider` | Exposes token usage and cost data to the dashboard. |
 | `web.RetryProvider` | Exposes retry queue state to the dashboard. |
+| `web.SprintProvider` | Provides issue and PR data from GitHub for the sprint board view. |
 
 ## State Management
 
