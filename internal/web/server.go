@@ -3,7 +3,7 @@ package web
 import (
 	"context"
 	"encoding/json"
-	"log"
+	"log/slog"
 	"net/http"
 	"os/exec"
 	"strconv"
@@ -82,7 +82,7 @@ func NewServer(state StateProvider, cfg *config.Config, metrics MetricsProvider,
 
 func (s *Server) buildRouter() chi.Router {
 	r := chi.NewRouter()
-	r.Use(middleware.Logger)
+	r.Use(middleware.RequestLogger(&slogLogFormatter{}))
 	r.Use(middleware.Recoverer)
 
 	r.Route("/api/v1", func(r chi.Router) {
@@ -243,13 +243,13 @@ func (s *Server) buildSprintData(ctx context.Context) pages.SprintData {
 		label := s.cfg.GitHub.EligibleLabels[0]
 		allIssues, err := s.sprint.FetchLabeledIssues(ctx, label)
 		if err != nil {
-			log.Printf("sprint: failed to fetch labeled issues: %v", err)
+			slog.Warn("sprint: failed to fetch labeled issues", "error", err)
 		} else {
 			// Enrich issues with linked PR data and categorize
 			for _, issue := range allIssues {
 				prs, err := s.sprint.FetchLinkedPullRequests(ctx, issue.Repo, issue.ID)
 				if err != nil {
-					log.Printf("sprint: failed to fetch PRs for %s#%d: %v", issue.Repo, issue.ID, err)
+					slog.Warn("sprint: failed to fetch linked PRs", "repo", issue.Repo, "issue_id", issue.ID, "error", err)
 				}
 				issue.LinkedPRs = prs
 

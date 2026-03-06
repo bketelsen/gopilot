@@ -32,3 +32,4 @@ bin/
 gopilot.log
 gopilot-local.log
 gopilot-test.yaml
+internal/web/static/styles.css
