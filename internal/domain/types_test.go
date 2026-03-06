@@ -156,6 +156,50 @@ func TestCommentSorting(t *testing.T) {
 	}
 }
 
+func TestIssueHasOpenPR(t *testing.T) {
+	tests := []struct {
+		name      string
+		linkedPRs []PullRequest
+		want      bool
+	}{
+		{"no PRs", nil, false},
+		{"open PR", []PullRequest{{Number: 1, State: "open"}}, true},
+		{"closed PR", []PullRequest{{Number: 1, State: "closed"}}, false},
+		{"merged PR", []PullRequest{{Number: 1, State: "closed", Merged: true}}, false},
+		{"mixed", []PullRequest{{Number: 1, State: "closed", Merged: true}, {Number: 2, State: "open"}}, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			issue := Issue{LinkedPRs: tt.linkedPRs}
+			if got := issue.HasOpenPR(); got != tt.want {
+				t.Errorf("HasOpenPR() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestIssueHasMergedPR(t *testing.T) {
+	tests := []struct {
+		name      string
+		linkedPRs []PullRequest
+		want      bool
+	}{
+		{"no PRs", nil, false},
+		{"open PR", []PullRequest{{Number: 1, State: "open"}}, false},
+		{"closed unmerged PR", []PullRequest{{Number: 1, State: "closed"}}, false},
+		{"merged PR", []PullRequest{{Number: 1, State: "closed", Merged: true}}, true},
+		{"mixed with merged", []PullRequest{{Number: 1, State: "open"}, {Number: 2, State: "closed", Merged: true}}, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			issue := Issue{LinkedPRs: tt.linkedPRs}
+			if got := issue.HasMergedPR(); got != tt.want {
+				t.Errorf("HasMergedPR() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestTokenCountsAdd(t *testing.T) {
 	a := TokenCounts{InputTokens: 100, OutputTokens: 50}
 	b := TokenCounts{InputTokens: 200, OutputTokens: 100}
