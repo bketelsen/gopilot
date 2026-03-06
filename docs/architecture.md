@@ -109,6 +109,7 @@ The following settings require a full restart to take effect:
 | `internal/skills/` | SKILL.md loader (frontmatter + markdown), injector |
 | `internal/metrics/` | Token tracking and cost estimation |
 | `internal/config/` | YAML config structs, loader, fsnotify watcher |
+| `internal/planning/` | Dashboard-based interactive planning sessions (WebSocket chat, plan parser) |
 | `internal/domain/` | Core types: Issue, RunEntry, CompletedRun, AgentEvent |
 | `components/` | Reusable templ UI components (button, card, dialog, etc.) |
 | `skills/` | Runtime skill definitions (SKILL.md files) |

@@ -6,8 +6,10 @@ import (
 	"os/exec"
 	"strconv"
 
+	"github.com/bketelsen/gopilot/internal/agent"
 	"github.com/bketelsen/gopilot/internal/config"
 	"github.com/bketelsen/gopilot/internal/domain"
+	"github.com/bketelsen/gopilot/internal/planning"
 	"github.com/bketelsen/gopilot/internal/web/templates/pages"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -46,6 +48,7 @@ type Server struct {
 	metrics        MetricsProvider
 	retries        RetryProvider
 	planning       PlanningProvider
+	planningMgr    *planning.Manager
 	triggerRefresh func()
 }
 
@@ -85,6 +88,8 @@ func (s *Server) buildRouter() chi.Router {
 	r.Get("/issues/{owner}/{repo}/{id}", s.handleIssueDetail)
 	r.Get("/sprint", s.handleSprintPage)
 	r.Get("/settings", s.handleSettingsPage)
+	r.Get("/planning", s.handlePlanningListPage)
+	r.Get("/planning/{id}", s.handlePlanningChatPage)
 
 	return r
 }
@@ -251,6 +256,31 @@ func (s *Server) handleSettingsPage(w http.ResponseWriter, r *http.Request) {
 	component.Render(r.Context(), w)
 }
 
+func (s *Server) handlePlanningListPage(w http.ResponseWriter, r *http.Request) {
+	var sessions []*planning.Session
+	if s.planningMgr != nil {
+		sessions = s.planningMgr.List()
+	}
+	repos := s.cfg.GitHub.Repos
+	component := pages.PlanningList(sessions, repos)
+	component.Render(r.Context(), w)
+}
+
+func (s *Server) handlePlanningChatPage(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if s.planningMgr == nil {
+		http.Error(w, "planning not configured", http.StatusNotFound)
+		return
+	}
+	sess := s.planningMgr.Get(id)
+	if sess == nil {
+		http.Error(w, "session not found", http.StatusNotFound)
+		return
+	}
+	component := pages.PlanningChat(sess)
+	component.Render(r.Context(), w)
+}
+
 func isCommandAvailable(name string) bool {
 	_, err := exec.LookPath(name)
 	return err == nil
@@ -259,6 +289,13 @@ func isCommandAvailable(name string) bool {
 // SetRefreshFunc sets the callback invoked by POST /api/v1/refresh.
 func (s *Server) SetRefreshFunc(fn func()) {
 	s.triggerRefresh = fn
+}
+
+// SetPlanningManager configures the planning manager and registers its routes.
+func (s *Server) SetPlanningManager(mgr *planning.Manager, runner agent.Runner, cfg planning.HandlerConfig) {
+	s.planningMgr = mgr
+	routes := planning.NewRoutes(mgr, runner, cfg)
+	routes.Register(s.router)
 }
 
 func (s *Server) handleRefresh(w http.ResponseWriter, r *http.Request) {

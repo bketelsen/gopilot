@@ -87,3 +87,36 @@ Build order matters: `generate` must run before `css`, both before `build`.
 Runtime config is in `gopilot.yaml` (see `internal/config/example.go` for defaults). Key sections: `github`, `polling`, `workspace` (with hooks), `agent`, `skills`, `dashboard`, `prompt`.
 
 Workspace hooks support variable interpolation: `{{repo}}`, `{{issue_id}}`, `${GITHUB_TOKEN}`.
+
+## Documentation
+
+This project has two documentation surfaces that **must be kept in sync** with code changes:
+
+1. **`README.md`** — Project overview, quick-start instructions, and feature summary.
+2. **MkDocs site** (`docs/` directory, configured by `mkdocs.yml`) — Full user-facing documentation including getting started, configuration, skills, CLI reference, architecture, and dashboard guides.
+
+### When to update docs
+
+Any change that affects user-facing behavior, configuration, CLI flags, new features, removed features, architecture, or the build/development workflow **must** include corresponding documentation updates. Specifically:
+
+- **New feature or package**: Add/update the relevant `docs/*.md` page and update `README.md` if it changes the project summary or quick-start flow. If a new top-level doc page is needed, add it to the `nav:` section in `mkdocs.yml`.
+- **Changed configuration options**: Update `docs/configuration.md` and any examples in `README.md`.
+- **New or changed CLI commands/flags**: Update `docs/cli.md`.
+- **Architecture changes** (new packages, changed interfaces, modified flows): Update `docs/architecture.md` and the Package Layout table above.
+- **Dashboard changes**: Update `docs/dashboard.md`.
+- **Skills changes**: Update `docs/skills.md`.
+- **Build/dev workflow changes**: Update the Build & Development Commands section above, `docs/getting-started.md`, and `README.md` if applicable.
+
+### Doc structure
+
+| File | Content |
+|------|---------|
+| `README.md` | Project intro, badges, feature highlights, quick-start, links to full docs |
+| `docs/index.md` | MkDocs home page |
+| `docs/getting-started.md` | Installation and first-run guide |
+| `docs/configuration.md` | `gopilot.yaml` reference |
+| `docs/skills.md` | Writing and using SKILL.md files |
+| `docs/cli.md` | CLI flags and usage |
+| `docs/architecture.md` | System design and package overview |
+| `docs/dashboard.md` | Web dashboard features and usage |
+| `mkdocs.yml` | MkDocs site configuration and nav structure |

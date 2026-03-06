@@ -4,20 +4,10 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"os"
 	"strings"
-	"time"
 
-	"github.com/bketelsen/gopilot/internal/agent"
 	"github.com/bketelsen/gopilot/internal/domain"
-	"github.com/bketelsen/gopilot/internal/prompt"
-	"github.com/bketelsen/gopilot/internal/skills"
 )
-
-// commentFetcher is the subset of github.Client needed for comment checking.
-type commentFetcher interface {
-	FetchIssueComments(ctx context.Context, repo string, id int) ([]domain.Comment, error)
-}
 
 // partitionPlanningIssues splits issues into planning and coding sets.
 func partitionPlanningIssues(issues []domain.Issue, planningLabel string) (planning, coding []domain.Issue) {
@@ -42,28 +32,6 @@ func partitionPlanningIssues(issues []domain.Issue, planningLabel string) (plann
 // Used to distinguish agent-posted comments from human comments by the same user.
 const PlanningCommentMarker = "<!-- gopilot-planning-agent -->"
 
-// hasNewHumanComment checks if there are new non-bot comments after lastCommentID.
-// A comment is considered "bot" if the author ends in [bot] or the body contains
-// the PlanningCommentMarker (indicating it was posted by the planning agent).
-func hasNewHumanComment(client commentFetcher, ctx context.Context, repo string, issueID, lastCommentID int) (bool, int) {
-	comments, err := client.FetchIssueComments(ctx, repo, issueID)
-	if err != nil {
-		return false, lastCommentID
-	}
-
-	latestID := lastCommentID
-	hasNew := false
-	for _, c := range comments {
-		if c.ID > lastCommentID && !isBotComment(c) {
-			hasNew = true
-		}
-		if c.ID > latestID {
-			latestID = c.ID
-		}
-	}
-	return hasNew, latestID
-}
-
 // isBotComment returns true if the comment was posted by a bot account or by the planning agent.
 func isBotComment(c domain.Comment) bool {
 	if strings.HasSuffix(c.Author, "[bot]") {
@@ -72,142 +40,36 @@ func isBotComment(c domain.Comment) bool {
 	return strings.Contains(c.Body, PlanningCommentMarker)
 }
 
-// processPlanningIssues handles planning-labeled issues.
+// processPlanningIssues handles planning-labeled issues by posting a redirect
+// comment pointing users to the interactive dashboard planning UI.
 func (o *Orchestrator) processPlanningIssues(ctx context.Context, issues []domain.Issue) {
 	for _, issue := range issues {
+		// Skip if we've already redirected this issue.
 		if o.state.IsPlanning(issue.ID) {
-			entry := o.state.GetPlanning(issue.ID)
-			switch entry.Phase {
-			case PlanningPhaseDetected:
-				// Previous attempt failed and was reset — re-dispatch.
-				o.dispatchPlanningAgent(ctx, issue, entry)
-			case PlanningPhaseAwaitingReply, PlanningPhasePlanProposed, PlanningPhaseAwaitingApproval:
-				hasNew, lastID := hasNewHumanComment(o.github, ctx, issue.Repo, issue.ID, entry.LastCommentID)
-				// Always update the high-water mark so we don't re-scan old comments.
-				if lastID > entry.LastCommentID {
-					o.state.UpdatePlanning(issue.ID, func(e *PlanningEntry) {
-						e.LastCommentID = lastID
-					})
-				}
-				if hasNew {
-					if o.sseHub != nil {
-						o.sseHub.Broadcast("planning:reply_detected", fmt.Sprintf(`{"issue_id":%d}`, issue.ID))
-					}
-					o.dispatchPlanningAgent(ctx, issue, entry)
-				}
-			}
 			continue
 		}
 
-		// New planning issue
-		entry := &PlanningEntry{
+		addr := o.cfg.Dashboard.Addr
+		if addr == "" {
+			addr = ":3000"
+		}
+		body := fmt.Sprintf(
+			"Planning sessions are now interactive in the dashboard.\n\n"+
+				"Start one at: http://localhost%s/planning/new?repo=%s&issue=%d\n\n"+
+				"%s",
+			addr, issue.Repo, issue.ID, PlanningCommentMarker,
+		)
+		if err := o.github.AddComment(ctx, issue.Repo, issue.ID, body); err != nil {
+			slog.Error("failed to post planning redirect", "issue", issue.Identifier(), "error", err)
+			continue
+		}
+
+		o.state.AddPlanning(issue.ID, &PlanningEntry{
 			IssueID: issue.ID,
 			Repo:    issue.Repo,
-			Phase:   PlanningPhaseDetected,
-		}
-		o.state.AddPlanning(issue.ID, entry)
-		o.dispatchPlanningAgent(ctx, issue, entry)
-	}
-}
+			Phase:   PlanningPhaseComplete,
+		})
 
-// dispatchPlanningAgent invokes the agent for one planning interaction.
-func (o *Orchestrator) dispatchPlanningAgent(ctx context.Context, issue domain.Issue, entry *PlanningEntry) {
-	if !o.state.SlotsAvailable(o.cfg.Polling.MaxConcurrentAgents) {
-		return
+		slog.Info("posted planning redirect", "issue", issue.Identifier())
 	}
-	if o.state.IsClaimed(issue.ID) || o.state.GetRunning(issue.ID) != nil {
-		return
-	}
-	if !o.state.Claim(issue.ID) {
-		return
-	}
-
-	log := slog.With("issue", issue.Identifier(), "planning_phase", string(entry.Phase))
-
-	comments, err := o.github.FetchIssueComments(ctx, issue.Repo, issue.ID)
-	if err != nil {
-		log.Error("failed to fetch comments for planning", "error", err)
-		o.state.Release(issue.ID)
-		return
-	}
-
-	// Record the highest comment ID before dispatching so we only detect
-	// comments posted AFTER the agent runs.
-	var highWater int
-	for _, c := range comments {
-		if c.ID > highWater {
-			highWater = c.ID
-		}
-	}
-
-	planningSkillText := skills.InjectSkills(o.skills, []string{"planning"}, nil)
-	rendered := prompt.RenderPlanning(issue, comments, planningSkillText)
-
-	agentCmd := o.cfg.Planning.Agent
-	if agentCmd == "" {
-		agentCmd = o.cfg.Agent.Command
-	}
-	runner, ok := o.agents[agentCmd]
-	if !ok {
-		runner = o.agentForIssue(issue)
-	}
-	if runner == nil {
-		log.Error("no agent runner available for planning")
-		o.state.Release(issue.ID)
-		return
-	}
-
-	model := o.cfg.Planning.Model
-	if model == "" {
-		model = o.cfg.Agent.Model
-	}
-
-	opts := agent.AgentOpts{
-		Model:            model,
-		MaxContinuations: o.cfg.Agent.MaxAutopilotContinues,
-	}
-	// Planning agents run in a temp directory — they don't need a code workspace.
-	tmpDir, mkErr := os.MkdirTemp("", "gopilot-planning-*")
-	if mkErr != nil {
-		log.Error("failed to create temp dir for planning", "error", mkErr)
-		o.state.Release(issue.ID)
-		return
-	}
-	sess, err := runner.Start(ctx, tmpDir, rendered, opts)
-	if err != nil {
-		log.Error("planning agent start failed", "error", err)
-		os.RemoveAll(tmpDir)
-		o.state.Release(issue.ID)
-		return
-	}
-
-	o.sessionsMu.Lock()
-	o.sessions[issue.ID] = sess
-	o.sessionsMu.Unlock()
-
-	now := time.Now()
-	runEntry := &domain.RunEntry{
-		Issue:       issue,
-		SessionID:   sess.ID,
-		ProcessPID:  sess.PID,
-		StartedAt:   now,
-		LastEventAt: now,
-		Attempt:     1,
-	}
-	o.state.AddRunning(issue.ID, runEntry)
-
-	o.state.UpdatePlanning(issue.ID, func(e *PlanningEntry) {
-		e.Phase = PlanningPhaseAwaitingReply
-		e.QuestionsAsked++
-		if highWater > e.LastCommentID {
-			e.LastCommentID = highWater
-		}
-	})
-
-	log.Info("planning agent dispatched", "session_id", sess.ID)
-	if o.sseHub != nil {
-		o.sseHub.Broadcast("planning:question_posted", fmt.Sprintf(`{"issue_id":%d}`, issue.ID))
-	}
-
-	go o.monitorAgent(issue, sess, runEntry)
 }

@@ -1,0 +1,98 @@
+package pages
+
+import (
+	"fmt"
+	"github.com/bketelsen/gopilot/internal/planning"
+	"github.com/bketelsen/gopilot/internal/web/templates/layouts"
+)
+
+templ PlanningList(sessions []*planning.Session, repos []string) {
+	@layouts.Base("Planning") {
+		<div class="max-w-4xl mx-auto">
+			<div class="flex justify-between items-center mb-6">
+				<h1 class="text-2xl font-bold">Planning Sessions</h1>
+				<button
+					onclick="document.getElementById('new-session-dialog').showModal()"
+					class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+				>
+					New Planning Session
+				</button>
+			</div>
+
+			<div class="space-y-3">
+				if len(sessions) == 0 {
+					<div class="bg-white dark:bg-gray-800 rounded-lg shadow p-8 text-center text-gray-500">
+						No planning sessions yet. Start one to begin.
+					</div>
+				}
+				for _, sess := range sessions {
+					<a href={ templ.SafeURL(fmt.Sprintf("/planning/%s", sess.ID)) }
+						class="block bg-white dark:bg-gray-800 rounded-lg shadow p-4 hover:ring-2 hover:ring-blue-500 transition">
+						<div class="flex justify-between items-center">
+							<div>
+								<div class="font-medium">{ sess.Repo }</div>
+								if sess.LinkedIssue != nil {
+									<div class="text-sm text-gray-500">Issue #{ fmt.Sprintf("%d", *sess.LinkedIssue) }</div>
+								}
+							</div>
+							<div class="flex items-center gap-3">
+								<span class="px-2 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200">
+									{ string(sess.Status) }
+								</span>
+								<span class="text-sm text-gray-500">
+									{ fmt.Sprintf("%d messages", len(sess.Messages)) }
+								</span>
+							</div>
+						</div>
+					</a>
+				}
+			</div>
+
+			<dialog id="new-session-dialog" class="rounded-lg shadow-xl p-0 backdrop:bg-black/50 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100">
+				<form method="dialog" class="p-6 min-w-96">
+					<h2 class="text-lg font-bold mb-4">New Planning Session</h2>
+					<div class="mb-4">
+						<label class="block text-sm font-medium mb-1">Repository</label>
+						<select id="new-session-repo" class="w-full rounded-md border border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-3 py-2">
+							for _, repo := range repos {
+								<option value={ repo }>{ repo }</option>
+							}
+						</select>
+					</div>
+					<div class="mb-4">
+						<label class="block text-sm font-medium mb-1">GitHub Issue (optional)</label>
+						<input id="new-session-issue" type="number" placeholder="e.g. 42"
+							class="w-full rounded-md border border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-3 py-2"/>
+					</div>
+					<div class="flex justify-end gap-2">
+						<button type="submit" class="px-4 py-2 rounded-md border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700">Cancel</button>
+						<button type="button" id="create-session-btn"
+							class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+							onclick="createSession()">
+							Start
+						</button>
+					</div>
+				</form>
+			</dialog>
+
+			<script>
+				async function createSession() {
+					const repo = document.getElementById('new-session-repo').value;
+					const issueInput = document.getElementById('new-session-issue').value;
+					const body = { repo: repo };
+					if (issueInput) body.linked_issue = parseInt(issueInput);
+
+					const resp = await fetch('/api/planning/sessions', {
+						method: 'POST',
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify(body),
+					});
+					if (resp.ok) {
+						const data = await resp.json();
+						window.location.href = '/planning/' + data.id;
+					}
+				}
+			</script>
+		</div>
+	}
+}

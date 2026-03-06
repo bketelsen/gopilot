@@ -55,6 +55,34 @@ Shows agents that failed and are waiting to be retried. Each entry displays:
 - Backoff countdown (time until next retry)
 - Failure reason from the last attempt
 
+### Planning
+
+Interactive planning sessions powered by a WebSocket-based chat UI. Start a session by clicking "New Planning Session" on the dashboard or navigating to `/planning`.
+
+**Starting a session:**
+
+1. Select a repository from the configured repos dropdown.
+2. Optionally link a GitHub issue number for context.
+3. Click "Start" to create the session and open the chat.
+
+**During a session:**
+
+The planning agent runs as a subprocess with full access to a workspace checkout of the repository. It can explore the codebase, read files, and cite specific code while discussing the feature with you. The conversation starts freeform and converges toward a structured plan.
+
+Agent responses stream in real-time over WebSocket. The input is disabled while the agent is working and re-enabled when it finishes each turn.
+
+**Completing a session:**
+
+When the agent proposes a structured plan, you can choose what to do with it:
+
+- **Create GitHub Issues** -- Each checked task becomes a GitHub issue with labels, dependencies, and phase metadata.
+- **Save Plan Doc** -- The plan is saved as a markdown file in the repository.
+- **Both** -- Creates issues and saves the document.
+
+**Reconnecting:**
+
+If you close the browser tab and reopen the session URL, the full conversation history is replayed so you can continue where you left off.
+
 ### Settings
 
 Displays the current runtime configuration and GitHub API rate limit status. Helpful for verifying that config hot-reloads have taken effect and for monitoring API quota consumption.
@@ -81,3 +109,4 @@ This is built on top of HTMX, which handles partial page updates seamlessly. Whe
 | Tailwind CSS v4 | Utility-first CSS framework for styling dashboard components. |
 | HTMX | Handles SSE subscriptions and partial DOM updates. Enables the real-time behavior without custom JavaScript. |
 | SSE event hub | Internal Go component that broadcasts state changes to all connected dashboard clients. |
+| WebSocket (nhooyr.io/websocket) | Bidirectional communication for interactive planning chat sessions. |
