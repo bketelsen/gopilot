@@ -55,6 +55,12 @@ func (m *mockGitHub) CreateIssue(ctx context.Context, repo, title, body string, 
 func (m *mockGitHub) AddSubIssue(ctx context.Context, repo string, parentID, childID int) error {
 	return nil
 }
+func (m *mockGitHub) FetchLabeledIssues(ctx context.Context, label string) ([]domain.Issue, error) {
+	return m.issues, nil
+}
+func (m *mockGitHub) FetchLinkedPullRequests(ctx context.Context, repo string, issueNumber int) ([]domain.PullRequest, error) {
+	return nil, nil
+}
 func (m *mockGitHub) FetchMonitoredPRs(ctx context.Context, label string) ([]domain.PullRequest, error) {
 	return nil, nil
 }
@@ -342,6 +348,12 @@ func (m *mockGitHubSplit) CreateIssue(ctx context.Context, repo, title, body str
 func (m *mockGitHubSplit) AddSubIssue(ctx context.Context, repo string, parentID, childID int) error {
 	return nil
 }
+func (m *mockGitHubSplit) FetchLabeledIssues(ctx context.Context, label string) ([]domain.Issue, error) {
+	return m.candidates, nil
+}
+func (m *mockGitHubSplit) FetchLinkedPullRequests(ctx context.Context, repo string, issueNumber int) ([]domain.PullRequest, error) {
+	return nil, nil
+}
 func (m *mockGitHubSplit) FetchMonitoredPRs(ctx context.Context, label string) ([]domain.PullRequest, error) {
 	return nil, nil
 }
@@ -351,6 +363,7 @@ func (m *mockGitHubSplit) FetchCheckRuns(ctx context.Context, repo string, ref s
 func (m *mockGitHubSplit) FetchCheckRunLog(ctx context.Context, repo string, checkRunID int64) (string, error) {
 	return "", nil
 }
+
 func TestRetrySkipsIneligibleIssue(t *testing.T) {
 	cfg := &config.Config{
 		GitHub: config.GitHubConfig{

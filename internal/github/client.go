@@ -19,6 +19,8 @@ type Client interface {
 	RemoveLabel(ctx context.Context, repo string, id int, label string) error
 	CreateIssue(ctx context.Context, repo, title, body string, labels []string) (*domain.Issue, error)
 	AddSubIssue(ctx context.Context, repo string, parentID, childID int) error
+	FetchLabeledIssues(ctx context.Context, label string) ([]domain.Issue, error)
+	FetchLinkedPullRequests(ctx context.Context, repo string, issueNumber int) ([]domain.PullRequest, error)
 
 	// PR monitoring methods
 	FetchMonitoredPRs(ctx context.Context, label string) ([]domain.PullRequest, error)

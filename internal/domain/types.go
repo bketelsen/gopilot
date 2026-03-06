@@ -34,9 +34,32 @@ type Issue struct {
 	Iteration string // Sprint/iteration name
 	Effort    int    // Story points
 
+	// Pull requests
+	LinkedPRs []PullRequest // Pull requests linked to this issue
+
 	// Timestamps
 	CreatedAt time.Time
 	UpdatedAt time.Time
+}
+
+// HasOpenPR returns true if the issue has at least one open (not yet merged) pull request.
+func (i Issue) HasOpenPR() bool {
+	for _, pr := range i.LinkedPRs {
+		if pr.State == "open" {
+			return true
+		}
+	}
+	return false
+}
+
+// HasMergedPR returns true if the issue has at least one merged pull request.
+func (i Issue) HasMergedPR() bool {
+	for _, pr := range i.LinkedPRs {
+		if pr.Merged {
+			return true
+		}
+	}
+	return false
 }
 
 // Identifier returns the "owner/repo#N" string for logging.
@@ -131,6 +154,56 @@ type Comment struct {
 	CreatedAt time.Time
 }
 
+// PullRequest represents a GitHub pull request linked to or monitored by gopilot.
+type PullRequest struct {
+	Number    int
+	Repo      string // "owner/repo" (set for monitored PRs)
+	HeadRef   string // branch name
+	HeadSHA   string // SHA of head commit (for check-run queries)
+	IssueID   int    // originating issue number, 0 if unknown
+	Title     string
+	State     string // "open", "closed"
+	Merged    bool
+	URL       string
+	CheckRuns []CheckRun
+}
+
+// Identifier returns the "owner/repo#N" string for the PR.
+func (pr PullRequest) Identifier() string {
+	return fmt.Sprintf("%s#%d", pr.Repo, pr.Number)
+}
+
+// HasFailedChecks returns true if any completed check run has a failure conclusion.
+func (pr PullRequest) HasFailedChecks() bool {
+	for _, cr := range pr.CheckRuns {
+		if cr.Status == "completed" && cr.Conclusion == "failure" {
+			return true
+		}
+	}
+	return false
+}
+
+// FailedCheckRuns returns only the check runs that completed with failure.
+func (pr PullRequest) FailedCheckRuns() []CheckRun {
+	var failed []CheckRun
+	for _, cr := range pr.CheckRuns {
+		if cr.Status == "completed" && cr.Conclusion == "failure" {
+			failed = append(failed, cr)
+		}
+	}
+	return failed
+}
+
+// ChecksComplete returns true if all check runs have completed.
+func (pr PullRequest) ChecksComplete() bool {
+	for _, cr := range pr.CheckRuns {
+		if cr.Status != "completed" {
+			return false
+		}
+	}
+	return len(pr.CheckRuns) > 0
+}
+
 // SortCommentsByTime sorts comments by creation time (oldest first).
 func SortCommentsByTime(comments []Comment) {
 	sort.SliceStable(comments, func(i, j int) bool {
@@ -218,55 +291,6 @@ type PlanningEntry struct {
 // Identifier returns the "owner/repo#N" string for the planning entry.
 func (p PlanningEntry) Identifier() string {
 	return fmt.Sprintf("%s#%d", p.Repo, p.IssueID)
-}
-
-// PullRequest represents a GitHub pull request monitored by gopilot.
-type PullRequest struct {
-	Number    int
-	Repo      string // "owner/repo"
-	HeadRef   string // branch name
-	HeadSHA   string // SHA of head commit (for check-run queries)
-	IssueID   int    // originating issue number, 0 if unknown
-	URL       string
-	State     string // open, closed, merged
-	Title     string
-	CheckRuns []CheckRun
-}
-
-// Identifier returns the "owner/repo#N" string for the PR.
-func (pr PullRequest) Identifier() string {
-	return fmt.Sprintf("%s#%d", pr.Repo, pr.Number)
-}
-
-// HasFailedChecks returns true if any completed check run has a failure conclusion.
-func (pr PullRequest) HasFailedChecks() bool {
-	for _, cr := range pr.CheckRuns {
-		if cr.Status == "completed" && cr.Conclusion == "failure" {
-			return true
-		}
-	}
-	return false
-}
-
-// FailedCheckRuns returns only the check runs that completed with failure.
-func (pr PullRequest) FailedCheckRuns() []CheckRun {
-	var failed []CheckRun
-	for _, cr := range pr.CheckRuns {
-		if cr.Status == "completed" && cr.Conclusion == "failure" {
-			failed = append(failed, cr)
-		}
-	}
-	return failed
-}
-
-// ChecksComplete returns true if all check runs have completed.
-func (pr PullRequest) ChecksComplete() bool {
-	for _, cr := range pr.CheckRuns {
-		if cr.Status != "completed" {
-			return false
-		}
-	}
-	return len(pr.CheckRuns) > 0
 }
 
 // CheckRun represents a CI check result on a PR.

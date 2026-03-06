@@ -308,6 +308,163 @@ func TestUpdateRepoLabel(t *testing.T) {
 	}
 }
 
+func TestToDomainStatusFromState(t *testing.T) {
+	open := ghIssue{Number: 1, State: "open", Title: "Open issue"}
+	closed := ghIssue{Number: 2, State: "closed", Title: "Closed issue"}
+
+	openIssue := open.toDomain("o/r")
+	if openIssue.Status != "Todo" {
+		t.Errorf("open issue Status = %q, want %q", openIssue.Status, "Todo")
+	}
+
+	closedIssue := closed.toDomain("o/r")
+	if closedIssue.Status != "Done" {
+		t.Errorf("closed issue Status = %q, want %q", closedIssue.Status, "Done")
+	}
+}
+
+func TestFetchLabeledIssues(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /repos/owner/repo/issues", func(w http.ResponseWriter, r *http.Request) {
+		state := r.URL.Query().Get("state")
+		label := r.URL.Query().Get("labels")
+		if label != "gopilot" {
+			t.Errorf("labels param = %q, want %q", label, "gopilot")
+		}
+
+		var issues []map[string]any
+		if state == "open" {
+			issues = []map[string]any{
+				{
+					"number": 1, "title": "Open todo", "body": "", "state": "open",
+					"html_url": "https://github.com/owner/repo/issues/1", "node_id": "N1",
+					"labels":     []map[string]any{{"name": "gopilot"}},
+					"created_at": "2026-01-01T00:00:00Z", "updated_at": "2026-01-02T00:00:00Z",
+				},
+				{
+					"number": 10, "title": "A PR not an issue", "body": "", "state": "open",
+					"html_url": "https://github.com/owner/repo/pull/10", "node_id": "N10",
+					"labels":       []map[string]any{{"name": "gopilot"}},
+					"pull_request": map[string]any{},
+					"created_at":   "2026-01-01T00:00:00Z", "updated_at": "2026-01-02T00:00:00Z",
+				},
+			}
+		} else if state == "closed" {
+			issues = []map[string]any{
+				{
+					"number": 2, "title": "Closed done", "body": "", "state": "closed",
+					"html_url": "https://github.com/owner/repo/issues/2", "node_id": "N2",
+					"labels":     []map[string]any{{"name": "gopilot"}},
+					"created_at": "2026-01-01T00:00:00Z", "updated_at": "2026-01-03T00:00:00Z",
+				},
+			}
+		}
+		json.NewEncoder(w).Encode(issues)
+	})
+
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	cfg := config.GitHubConfig{
+		Token: "test-token", Repos: []string{"owner/repo"},
+		EligibleLabels: []string{"gopilot"},
+	}
+	client := NewRESTClient(cfg, server.URL+"/")
+
+	issues, err := client.FetchLabeledIssues(context.Background(), "gopilot")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Should return 2 issues: 1 open + 1 closed; PR #10 should be excluded
+	if len(issues) != 2 {
+		t.Fatalf("got %d issues, want 2", len(issues))
+	}
+
+	if issues[0].ID != 1 || issues[0].Status != "Todo" {
+		t.Errorf("issue[0] = {ID:%d, Status:%q}, want {ID:1, Status:Todo}", issues[0].ID, issues[0].Status)
+	}
+	if issues[1].ID != 2 || issues[1].Status != "Done" {
+		t.Errorf("issue[1] = {ID:%d, Status:%q}, want {ID:2, Status:Done}", issues[1].ID, issues[1].Status)
+	}
+}
+
+func TestFetchLinkedPullRequests(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /repos/owner/repo/issues/1/timeline", func(w http.ResponseWriter, r *http.Request) {
+		events := []map[string]any{
+			{
+				"event": "cross-referenced",
+				"source": map[string]any{
+					"issue": map[string]any{
+						"number": 5, "title": "Fix for #1", "state": "open",
+						"html_url":     "https://github.com/owner/repo/pull/5",
+						"pull_request": map[string]any{"merged_at": nil},
+					},
+				},
+			},
+			{
+				"event": "cross-referenced",
+				"source": map[string]any{
+					"issue": map[string]any{
+						"number": 6, "title": "Another fix", "state": "closed",
+						"html_url":     "https://github.com/owner/repo/pull/6",
+						"pull_request": map[string]any{"merged_at": "2026-01-05T00:00:00Z"},
+					},
+				},
+			},
+			{
+				"event": "labeled",
+			},
+			{
+				"event": "cross-referenced",
+				"source": map[string]any{
+					"issue": map[string]any{
+						"number": 7, "title": "Not a PR, just a reference", "state": "open",
+						"html_url": "https://github.com/owner/repo/issues/7",
+					},
+				},
+			},
+			// Duplicate cross-reference for PR 5
+			{
+				"event": "cross-referenced",
+				"source": map[string]any{
+					"issue": map[string]any{
+						"number": 5, "title": "Fix for #1", "state": "open",
+						"html_url":     "https://github.com/owner/repo/pull/5",
+						"pull_request": map[string]any{"merged_at": nil},
+					},
+				},
+			},
+		}
+		json.NewEncoder(w).Encode(events)
+	})
+
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	cfg := config.GitHubConfig{Token: "test-token", Repos: []string{"owner/repo"}}
+	client := NewRESTClient(cfg, server.URL+"/")
+
+	prs, err := client.FetchLinkedPullRequests(context.Background(), "owner/repo", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Should return 2 PRs: #5 (open, not merged) and #6 (closed, merged)
+	// #7 is not a PR, and duplicate #5 should be deduplicated
+	if len(prs) != 2 {
+		t.Fatalf("got %d PRs, want 2", len(prs))
+	}
+
+	if prs[0].Number != 5 || prs[0].State != "open" || prs[0].Merged {
+		t.Errorf("pr[0] = %+v, want Number:5 State:open Merged:false", prs[0])
+	}
+	if prs[1].Number != 6 || prs[1].State != "closed" || !prs[1].Merged {
+		t.Errorf("pr[1] = %+v, want Number:6 State:closed Merged:true", prs[1])
+	}
+}
+
 func TestErrorWrapping(t *testing.T) {
 	// Use an unreachable server to trigger HTTP errors
 	cfg := config.GitHubConfig{

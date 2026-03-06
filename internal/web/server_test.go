@@ -1,6 +1,7 @@
 package web
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -90,6 +91,140 @@ func TestHealthEndpoint(t *testing.T) {
 
 	if w.Code != http.StatusOK {
 		t.Errorf("status = %d, want 200", w.Code)
+	}
+}
+
+// mockSprint implements SprintProvider for testing.
+type mockSprint struct {
+	issues map[string][]domain.Issue         // label -> issues
+	prs    map[int][]domain.PullRequest      // issueNumber -> PRs
+}
+
+func (m *mockSprint) FetchLabeledIssues(_ context.Context, label string) ([]domain.Issue, error) {
+	return m.issues[label], nil
+}
+
+func (m *mockSprint) FetchLinkedPullRequests(_ context.Context, _ string, issueNumber int) ([]domain.PullRequest, error) {
+	return m.prs[issueNumber], nil
+}
+
+func TestSprintPageCategorizesIssues(t *testing.T) {
+	// Issue 1: open, no PR, no agent running → Todo
+	// Issue 2: open, agent running → In Progress
+	// Issue 3: open, has open PR → In Review
+	// Issue 4: closed, has merged PR → Done
+	// Issue 5: closed, no PR → Done (from GitHub state)
+
+	state := &mockState{
+		entries: []*domain.RunEntry{
+			{
+				Issue:     domain.Issue{ID: 2, Repo: "o/r", Title: "Running task", Status: "Todo"},
+				SessionID: "s2",
+				StartedAt: time.Now(),
+			},
+		},
+	}
+
+	sprint := &mockSprint{
+		issues: map[string][]domain.Issue{
+			"gopilot": {
+				{ID: 1, Repo: "o/r", Title: "Waiting", Status: "Todo"},
+				{ID: 2, Repo: "o/r", Title: "Running task", Status: "Todo"},
+				{ID: 3, Repo: "o/r", Title: "Has PR", Status: "Todo"},
+				{ID: 4, Repo: "o/r", Title: "Merged", Status: "Done"},
+				{ID: 5, Repo: "o/r", Title: "Closed no PR", Status: "Done"},
+			},
+		},
+		prs: map[int][]domain.PullRequest{
+			1: {},
+			2: {},
+			3: {{Number: 10, State: "open", Merged: false}},
+			4: {{Number: 11, State: "closed", Merged: true}},
+			5: {},
+		},
+	}
+
+	cfg := &config.Config{
+		GitHub: config.GitHubConfig{
+			EligibleLabels: []string{"gopilot"},
+		},
+	}
+
+	srv := NewServer(state, cfg, nil, nil)
+	srv.SetSprintProvider(sprint)
+
+	req := httptest.NewRequest("GET", "/api/v1/sprint", nil)
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", w.Code)
+	}
+
+	var resp map[string]any
+	json.NewDecoder(w.Body).Decode(&resp)
+
+	byStatus, ok := resp["by_status"].(map[string]any)
+	if !ok {
+		t.Fatal("by_status not found in response")
+	}
+
+	todo := byStatus["Todo"].([]any)
+	inProgress := byStatus["In Progress"].([]any)
+	inReview := byStatus["In Review"].([]any)
+	done := byStatus["Done"].([]any)
+
+	if len(todo) != 1 {
+		t.Errorf("Todo count = %d, want 1", len(todo))
+	}
+	if len(inProgress) != 1 {
+		t.Errorf("In Progress count = %d, want 1", len(inProgress))
+	}
+	if len(inReview) != 1 {
+		t.Errorf("In Review count = %d, want 1", len(inReview))
+	}
+	if len(done) != 2 {
+		t.Errorf("Done count = %d, want 2", len(done))
+	}
+
+	total := resp["total"].(float64)
+	doneCount := resp["done"].(float64)
+	if total != 5 {
+		t.Errorf("total = %v, want 5", total)
+	}
+	if doneCount != 2 {
+		t.Errorf("done = %v, want 2", doneCount)
+	}
+}
+
+func TestSprintPageFallbackWithoutProvider(t *testing.T) {
+	state := &mockState{
+		entries: []*domain.RunEntry{
+			{
+				Issue:     domain.Issue{ID: 1, Repo: "o/r", Title: "Active"},
+				SessionID: "s1",
+				StartedAt: time.Now(),
+			},
+		},
+	}
+
+	// No sprint provider, no config → fallback to legacy behavior
+	srv := NewServer(state, nil, nil, nil)
+
+	req := httptest.NewRequest("GET", "/api/v1/sprint", nil)
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", w.Code)
+	}
+
+	var resp map[string]any
+	json.NewDecoder(w.Body).Decode(&resp)
+	byStatus := resp["by_status"].(map[string]any)
+	inProgress := byStatus["In Progress"].([]any)
+	if len(inProgress) != 1 {
+		t.Errorf("In Progress count = %d, want 1 (fallback)", len(inProgress))
 	}
 }
 

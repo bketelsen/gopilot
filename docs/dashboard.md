@@ -83,6 +83,21 @@ When the agent proposes a structured plan, you can choose what to do with it:
 
 If you close the browser tab and reopen the session URL, the full conversation history is replayed so you can continue where you left off.
 
+### Sprint View
+
+Available at `/sprint`. Displays a Kanban-style board with four columns reflecting the real state of all issues with the eligible label:
+
+| Column | Source |
+|--------|--------|
+| **Todo** | Open issues that are not claimed, not running, and have no linked PRs |
+| **In Progress** | Issues with an actively running agent |
+| **In Review** | Issues that have at least one open (unmerged) pull request |
+| **Done** | Issues with a merged pull request, or closed issues |
+
+The sprint view fetches both open and recently closed issues from GitHub, then enriches each issue with linked pull request data via the timeline events API. A progress bar shows completion (Done / Total).
+
+If the sprint provider is not configured, the view falls back to showing only actively running agents in the "In Progress" column.
+
 ### Settings
 
 Displays the current runtime configuration and GitHub API rate limit status. Helpful for verifying that config hot-reloads have taken effect and for monitoring API quota consumption.
