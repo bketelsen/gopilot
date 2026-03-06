@@ -27,11 +27,21 @@ type Task struct {
 }
 
 var (
-	planTitleRe = regexp.MustCompile(`^##\s+Plan:\s+(.+)`)
+	planTitleRe = regexp.MustCompile(`(?i)^##\s+\**Plan:\**\s+(.+)`)
 	phaseRe     = regexp.MustCompile(`^###\s+(?:Phase\s+\d+:\s+)?(.+)`)
 	taskRe      = regexp.MustCompile(`^-\s+\[([ xX])\]\s+(.+?)(?:\s+\(complexity:\s+(\w+)\))?$`)
 	depRe       = regexp.MustCompile(`^\s+Dependencies:\s+(.+)`)
 )
+
+// containsPlanTitle checks if the text contains a plan title line.
+func containsPlanTitle(text string) bool {
+	for _, line := range strings.Split(text, "\n") {
+		if planTitleRe.MatchString(line) {
+			return true
+		}
+	}
+	return false
+}
 
 // ParsePlan extracts a structured plan from markdown text.
 func ParsePlan(markdown string) (*Plan, error) {

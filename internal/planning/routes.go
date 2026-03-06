@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strings"
 
 	"github.com/bketelsen/gopilot/internal/agent"
 	"github.com/bketelsen/gopilot/internal/domain"
@@ -106,7 +105,7 @@ func (rt *Routes) createOutput(w http.ResponseWriter, r *http.Request) {
 	var planText string
 	sess.mu.Lock()
 	for i := len(sess.Messages) - 1; i >= 0; i-- {
-		if sess.Messages[i].Role == "agent" && strings.Contains(sess.Messages[i].Content, "## Plan:") {
+		if sess.Messages[i].Role == "agent" && containsPlanTitle(sess.Messages[i].Content) {
 			planText = sess.Messages[i].Content
 			break
 		}

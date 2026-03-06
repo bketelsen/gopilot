@@ -89,7 +89,7 @@ templ PlanningChat(session *planning.Session) {
 						agentBuf += (msg.content || '') + '\n';
 						document.getElementById('agent-streaming-content').textContent = agentBuf;
 						messages.scrollTop = messages.scrollHeight;
-						if (!hasPlan && agentBuf.includes('## Plan:')) {
+						if (!hasPlan && /^##\s+\**Plan:/im.test(agentBuf)) {
 							hasPlan = true;
 							document.getElementById('export-buttons').classList.remove('hidden');
 						}
@@ -209,7 +209,7 @@ templ PlanningChat(session *planning.Session) {
 				}
 				agentBuf += text + '\n';
 				currentTextPre.textContent += text + '\n';
-				if (!hasPlan && agentBuf.includes('## Plan:')) {
+				if (!hasPlan && /^##\s+\**Plan:/im.test(agentBuf)) {
 					hasPlan = true;
 					document.getElementById('export-buttons').classList.remove('hidden');
 				}

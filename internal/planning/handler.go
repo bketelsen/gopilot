@@ -109,8 +109,9 @@ func (h *Handler) runAgentTurn(ctx context.Context, conn *websocket.Conn, sess *
 	pr, pw := io.Pipe()
 
 	opts := agent.AgentOpts{
-		Stdout:   pw,
-		ReadOnly: true,
+		Stdout:           pw,
+		ReadOnly:         true,
+		MaxContinuations: 5,
 	}
 
 	slog.Info("starting planning agent", "session", sess.ID, "workspace", wsDir)
@@ -128,7 +129,9 @@ func (h *Handler) runAgentTurn(ctx context.Context, conn *websocket.Conn, sess *
 
 	var fullResponse strings.Builder
 	var events []json.RawMessage
+	planDetected := false
 	done := make(chan struct{})
+	agentName := h.runner.Name()
 	go func() {
 		defer close(done)
 		scanner := bufio.NewScanner(pr)
@@ -138,10 +141,9 @@ func (h *Handler) runAgentTurn(ctx context.Context, conn *websocket.Conn, sess *
 				continue
 			}
 
-			// Try to parse as JSON (Claude stream-json)
 			var raw map[string]any
 			if err := json.Unmarshal([]byte(line), &raw); err != nil {
-				// Not JSON — plain text fallback (e.g. Copilot)
+				// Not JSON — plain text fallback
 				fullResponse.WriteString(line)
 				fullResponse.WriteString("\n")
 				writeJSON(ctx, conn, WSMessage{Type: "agent", Content: line})
@@ -150,47 +152,30 @@ func (h *Handler) runAgentTurn(ctx context.Context, conn *websocket.Conn, sess *
 
 			eventType, _ := raw["type"].(string)
 
-			// Filter noise
-			switch eventType {
-			case "system", "rate_limit_event":
+			// Stop agent after it delivers a plan (on next turn boundary)
+			if planDetected && (eventType == "assistant.turn_end" || eventType == "result") {
+				slog.Info("plan detected, stopping agent after turn end", "session", sess.ID)
+				h.runner.Stop(agentSess) //nolint:errcheck // best-effort stop after plan delivery
+			}
+
+			var out map[string]any
+			var text string
+			if agentName == "copilot" {
+				out, text = transformCopilotEvent(raw)
+			} else {
+				out, text = transformClaudeEvent(raw)
+			}
+			if out == nil {
 				continue
 			}
 
-			// Transform and forward kept events
-			out := map[string]any{"source": "claude", "type": eventType}
-
-			switch eventType {
-			case "assistant":
-				// Flatten message.content into content_blocks
-				if msg, ok := raw["message"].(map[string]any); ok {
-					if content, ok := msg["content"].([]any); ok {
-						out["content_blocks"] = content
-						// Extract text for fullResponse
-						for _, block := range content {
-							if b, ok := block.(map[string]any); ok {
-								if b["type"] == "text" {
-									if text, ok := b["text"].(string); ok {
-										fullResponse.WriteString(text)
-										fullResponse.WriteString("\n")
-									}
-								}
-							}
-						}
-					}
+			if text != "" {
+				fullResponse.WriteString(text)
+				fullResponse.WriteString("\n")
+				if !planDetected && containsPlanTitle(fullResponse.String()) {
+					planDetected = true
+					slog.Info("plan title detected in agent output", "session", sess.ID)
 				}
-			case "tool_result":
-				out["tool_use_id"] = raw["tool_use_id"]
-				out["content"] = raw["content"]
-			case "result":
-				for _, key := range []string{"subtype", "duration_ms", "num_turns", "total_cost_usd", "usage", "result"} {
-					if v, ok := raw[key]; ok {
-						out[key] = v
-					}
-				}
-			default:
-				// Unknown type — forward as-is with source tag
-				raw["source"] = "claude"
-				out = raw
 			}
 
 			eventJSON, err := json.Marshal(out)
@@ -247,17 +232,30 @@ func (h *Handler) buildPrompt(sess *Session) string {
 		}
 	}
 
-	b.WriteString("## Instructions\n\n")
-	b.WriteString("You are a PLANNING assistant ONLY. You must NEVER execute, implement, or modify any code.\n")
-	b.WriteString("Your job is to:\n")
-	b.WriteString("1. Explore the codebase to understand the current state\n")
-	b.WriteString("2. Ask clarifying questions if needed\n")
-	b.WriteString("3. Propose a structured plan for the user to review\n\n")
-	b.WriteString("DO NOT create, edit, or delete any files. DO NOT run any commands that modify state.\n")
-	b.WriteString("You may read files and search code to inform your plan.\n\n")
-	b.WriteString("When you have enough context, propose a structured plan using this exact format:\n\n")
-	b.WriteString("```\n## Plan: <title>\n### Phase 1: <name>\n- [ ] Task description (complexity: S/M/L)\n  Dependencies: none\n```\n\n")
-	b.WriteString("After presenting the plan, STOP and wait for user feedback. Do not proceed to implement it.\n\n")
+	b.WriteString("## CRITICAL RULES — READ BEFORE DOING ANYTHING\n\n")
+	b.WriteString("**YOU ARE A PLANNING-ONLY ASSISTANT.** Your ONLY purpose is to produce a written plan.\n\n")
+	b.WriteString("### What you MUST do:\n")
+	b.WriteString("1. Read files and search code to understand the codebase\n")
+	b.WriteString("2. Ask the user clarifying questions if needed\n")
+	b.WriteString("3. Output a structured plan in the EXACT format shown below\n")
+	b.WriteString("4. STOP after presenting the plan and wait for user feedback\n\n")
+	b.WriteString("### What you MUST NEVER do:\n")
+	b.WriteString("- NEVER create, edit, write, or delete any files\n")
+	b.WriteString("- NEVER run shell commands, scripts, or builds\n")
+	b.WriteString("- NEVER implement any part of the plan\n")
+	b.WriteString("- NEVER write code (not even examples or snippets to files)\n")
+	b.WriteString("- NEVER attempt to use tools you don't have access to\n\n")
+	b.WriteString("If you catch yourself starting to implement, STOP IMMEDIATELY and return to planning.\n\n")
+	b.WriteString("### Required plan format\n\n")
+	b.WriteString("Your plan MUST use this EXACT markdown format (not inside a code fence):\n\n")
+	b.WriteString("## Plan: <title>\n\n")
+	b.WriteString("### Phase 1: <name>\n")
+	b.WriteString("- [ ] Task description (complexity: S/M/L)\n")
+	b.WriteString("  Dependencies: none\n\n")
+	b.WriteString("### Phase 2: <name>\n")
+	b.WriteString("- [ ] Task description (complexity: S/M/L)\n")
+	b.WriteString("  Dependencies: Phase 1\n\n")
+	b.WriteString("**Output the plan as regular markdown text, NOT inside a code block.**\n\n")
 
 	if h.cfg.SkillText != "" {
 		b.WriteString("## Planning Skill\n\n")
@@ -266,6 +264,124 @@ func (h *Handler) buildPrompt(sess *Session) string {
 	}
 
 	return b.String()
+}
+
+// transformClaudeEvent normalizes a Claude stream-json event.
+// Returns nil to indicate the event should be filtered.
+func transformClaudeEvent(raw map[string]any) (out map[string]any, text string) {
+	eventType, _ := raw["type"].(string)
+
+	switch eventType {
+	case "system", "rate_limit_event":
+		return nil, ""
+	}
+
+	out = map[string]any{"source": "claude", "type": eventType}
+
+	switch eventType {
+	case "assistant":
+		if msg, ok := raw["message"].(map[string]any); ok {
+			if content, ok := msg["content"].([]any); ok {
+				out["content_blocks"] = content
+				for _, block := range content {
+					if b, ok := block.(map[string]any); ok {
+						if b["type"] == "text" {
+							if t, ok := b["text"].(string); ok {
+								text += t + "\n"
+							}
+						}
+					}
+				}
+			}
+		}
+	case "tool_result":
+		out["tool_use_id"] = raw["tool_use_id"]
+		out["content"] = raw["content"]
+	case "result":
+		for _, key := range []string{"subtype", "duration_ms", "num_turns", "total_cost_usd", "usage", "result"} {
+			if v, ok := raw[key]; ok {
+				out[key] = v
+			}
+		}
+	default:
+		raw["source"] = "claude"
+		out = raw
+	}
+
+	return out, strings.TrimRight(text, "\n")
+}
+
+// transformCopilotEvent normalizes a Copilot JSONL event into the same shape as Claude events.
+// Returns nil to indicate the event should be filtered.
+func transformCopilotEvent(raw map[string]any) (out map[string]any, text string) {
+	eventType, _ := raw["type"].(string)
+
+	switch eventType {
+	case "user.message", "assistant.turn_start", "assistant.turn_end",
+		"assistant.message_delta", "assistant.reasoning", "assistant.reasoning_delta",
+		"tool.execution_start", "session.info":
+		return nil, ""
+	}
+
+	data, _ := raw["data"].(map[string]any)
+
+	switch eventType {
+	case "assistant.message":
+		out = map[string]any{"source": "copilot", "type": "assistant"}
+		var blocks []any
+
+		if content, _ := data["content"].(string); content != "" {
+			blocks = append(blocks, map[string]any{"type": "text", "text": content})
+			text = content
+		}
+
+		if toolReqs, ok := data["toolRequests"].([]any); ok {
+			for _, tr := range toolReqs {
+				if req, ok := tr.(map[string]any); ok {
+					blocks = append(blocks, map[string]any{
+						"type":  "tool_use",
+						"id":    req["toolCallId"],
+						"name":  req["name"],
+						"input": req["arguments"],
+					})
+				}
+			}
+		}
+
+		out["content_blocks"] = blocks
+
+	case "tool.execution_complete":
+		out = map[string]any{
+			"source":      "copilot",
+			"type":        "tool_result",
+			"tool_use_id": data["toolCallId"],
+		}
+		if result, ok := data["result"].(map[string]any); ok {
+			out["content"] = result["content"]
+		}
+
+	case "result":
+		subtype := "success"
+		if code, ok := raw["exitCode"].(float64); ok && code != 0 {
+			subtype = "error"
+		}
+		out = map[string]any{
+			"source":  "copilot",
+			"type":    "result",
+			"subtype": subtype,
+		}
+		if usage, ok := raw["usage"].(map[string]any); ok {
+			out["usage"] = usage
+			if dur, ok := usage["sessionDurationMs"].(float64); ok {
+				out["duration_ms"] = dur
+			}
+		}
+
+	default:
+		return nil, ""
+	}
+
+	return out, text
 }
 
 func writeJSON(ctx context.Context, conn *websocket.Conn, msg WSMessage) {

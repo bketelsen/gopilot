@@ -37,8 +37,8 @@ workspace:
     before_remove: ""
 
 agent:
-  command: claude
-  model: claude-sonnet-4-6
+  command: copilot
+  model: claude-sonnet-4.6
   max_autopilot_continues: 20
   turn_timeout_ms: 1800000
   stall_timeout_ms: 500000

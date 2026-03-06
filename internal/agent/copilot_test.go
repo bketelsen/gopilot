@@ -41,6 +41,9 @@ func TestCopilotBuildArgs(t *testing.T) {
 	if !strings.Contains(joined, "-s") {
 		t.Error("missing -s flag")
 	}
+	if !strings.Contains(joined, "--output-format json") {
+		t.Error("missing --output-format json flag")
+	}
 }
 
 func TestCopilotStartStop(t *testing.T) {

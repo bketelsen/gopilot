@@ -15,10 +15,16 @@ import (
 )
 
 type fakeRunner struct {
+	name   string
 	output string
 }
 
-func (f *fakeRunner) Name() string { return "fake" }
+func (f *fakeRunner) Name() string {
+	if f.name != "" {
+		return f.name
+	}
+	return "fake"
+}
 
 func (f *fakeRunner) Start(ctx context.Context, workspace string, prompt string, opts agent.AgentOpts) (*agent.Session, error) {
 	done := make(chan struct{})
@@ -344,5 +350,152 @@ func TestHandler_ReplayMessages(t *testing.T) {
 	}
 	if messages[2].Type != "status" {
 		t.Errorf("expected status message, got: %+v", messages[2])
+	}
+}
+
+func TestHandler_CopilotStreamJSONParsing(t *testing.T) {
+	mgr := planning.NewManager()
+	sess, _ := mgr.Create("owner/repo", nil)
+
+	// Simulate Copilot JSONL output
+	output := strings.Join([]string{
+		`{"type":"user.message","data":{"content":"analyze"},"id":"1","timestamp":"2026-01-01T00:00:00Z"}`,
+		`{"type":"assistant.turn_start","data":{"turnId":"0"},"id":"2","timestamp":"2026-01-01T00:00:01Z"}`,
+		`{"type":"assistant.message_delta","data":{"messageId":"m1","deltaContent":"Hello"},"id":"3","timestamp":"2026-01-01T00:00:02Z","ephemeral":true}`,
+		`{"type":"assistant.message","data":{"messageId":"m1","content":"Hello world","toolRequests":[{"toolCallId":"tc1","name":"view","arguments":{"path":"/tmp/main.go"},"type":"function"}],"outputTokens":50},"id":"4","timestamp":"2026-01-01T00:00:03Z"}`,
+		`{"type":"tool.execution_start","data":{"toolCallId":"tc1","toolName":"view","arguments":{"path":"/tmp/main.go"}},"id":"5","timestamp":"2026-01-01T00:00:04Z"}`,
+		`{"type":"tool.execution_complete","data":{"toolCallId":"tc1","success":true,"result":{"content":"package main\n"}},"id":"6","timestamp":"2026-01-01T00:00:05Z"}`,
+		`{"type":"assistant.turn_end","data":{"turnId":"0"},"id":"7","timestamp":"2026-01-01T00:00:06Z"}`,
+		`{"type":"result","timestamp":"2026-01-01T00:00:07Z","exitCode":0,"usage":{"premiumRequests":1,"totalApiDurationMs":3000,"sessionDurationMs":7000}}`,
+	}, "\n") + "\n"
+
+	h := planning.NewHandler(mgr, &fakeRunner{name: "copilot", output: output}, planning.HandlerConfig{
+		WorkspaceRoot: t.TempDir(),
+	})
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h.HandleWebSocket(w, r, sess.ID)
+	}))
+	defer srv.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	conn, _, err := websocket.Dial(ctx, wsURL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.CloseNow()
+
+	// Read initial status
+	_, data, _ := conn.Read(ctx)
+	var statusMsg planning.WSMessage
+	json.Unmarshal(data, &statusMsg)
+	if statusMsg.Type != "status" {
+		t.Fatalf("expected status, got %s", statusMsg.Type)
+	}
+
+	// Send user message to trigger agent turn
+	msgData, _ := json.Marshal(planning.WSMessage{Type: "message", Content: "analyze"})
+	conn.Write(ctx, websocket.MessageText, msgData)
+
+	// Collect all messages until status=pending
+	var agentEvents []string
+	for {
+		_, data, err := conn.Read(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var msg planning.WSMessage
+		json.Unmarshal(data, &msg)
+
+		if msg.Type == "agent_event" {
+			agentEvents = append(agentEvents, msg.Content)
+		}
+		if msg.Type == "status" && msg.Status == "pending" {
+			break
+		}
+	}
+
+	// Should have 3 events: assistant.message, tool.execution_complete, result
+	// Filtered: user.message, turn_start, message_delta, execution_start, turn_end
+	if len(agentEvents) != 3 {
+		t.Errorf("expected 3 agent_events, got %d", len(agentEvents))
+		for i, e := range agentEvents {
+			t.Logf("  event[%d]: %s", i, e)
+		}
+	}
+
+	// Verify all events have source:"copilot"
+	for i, e := range agentEvents {
+		var parsed map[string]any
+		json.Unmarshal([]byte(e), &parsed)
+		if parsed["source"] != "copilot" {
+			t.Errorf("event[%d]: expected source=copilot, got %v", i, parsed["source"])
+		}
+	}
+
+	// Verify assistant event has normalized content_blocks
+	if len(agentEvents) >= 1 {
+		var assistant map[string]any
+		json.Unmarshal([]byte(agentEvents[0]), &assistant)
+		if assistant["type"] != "assistant" {
+			t.Errorf("event[0]: expected type=assistant, got %v", assistant["type"])
+		}
+		blocks, ok := assistant["content_blocks"].([]any)
+		if !ok {
+			t.Fatal("event[0]: missing content_blocks")
+		}
+		// Should have text block + tool_use block
+		if len(blocks) != 2 {
+			t.Errorf("expected 2 content_blocks, got %d", len(blocks))
+		}
+	}
+
+	// Verify tool_result
+	if len(agentEvents) >= 2 {
+		var toolResult map[string]any
+		json.Unmarshal([]byte(agentEvents[1]), &toolResult)
+		if toolResult["type"] != "tool_result" {
+			t.Errorf("event[1]: expected type=tool_result, got %v", toolResult["type"])
+		}
+		if toolResult["tool_use_id"] != "tc1" {
+			t.Errorf("event[1]: expected tool_use_id=tc1, got %v", toolResult["tool_use_id"])
+		}
+		if toolResult["content"] != "package main\n" {
+			t.Errorf("event[1]: unexpected content: %v", toolResult["content"])
+		}
+	}
+
+	// Verify result
+	if len(agentEvents) >= 3 {
+		var result map[string]any
+		json.Unmarshal([]byte(agentEvents[2]), &result)
+		if result["type"] != "result" {
+			t.Errorf("event[2]: expected type=result, got %v", result["type"])
+		}
+		if result["subtype"] != "success" {
+			t.Errorf("event[2]: expected subtype=success, got %v", result["subtype"])
+		}
+		if result["duration_ms"] != 7000.0 {
+			t.Errorf("event[2]: expected duration_ms=7000, got %v", result["duration_ms"])
+		}
+	}
+
+	// Verify text was extracted
+	got := mgr.Get(sess.ID)
+	var agentMsg *planning.ChatMessage
+	for i := range got.Messages {
+		if got.Messages[i].Role == "agent" {
+			agentMsg = &got.Messages[i]
+			break
+		}
+	}
+	if agentMsg == nil {
+		t.Fatal("no agent message saved")
+	}
+	if !strings.Contains(agentMsg.Content, "Hello world") {
+		t.Errorf("text content not extracted, got: %s", agentMsg.Content)
 	}
 }

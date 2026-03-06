@@ -104,9 +104,14 @@ func (r *CopilotRunner) buildArgs(prompt string, _ string, opts AgentOpts) []str
 		"--autopilot",
 		"--share", sharePath,
 		"-s",
+		"--output-format", "json",
 	}
 	if opts.ReadOnly {
-		args = append(args, "--allow-all", "--deny-tool", "write", "--deny-tool", "shell")
+		args = append(args,
+			"--allow-all",
+			"--available-tools", "view", "grep", "glob", "web_fetch", "web_search", "report_intent",
+			"--excluded-tools", "bash", "write_bash", "create", "edit", "shell", "write", "task", "sql",
+		)
 	} else {
 		args = append(args, "--allow-all")
 	}
