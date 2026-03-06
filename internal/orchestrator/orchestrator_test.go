@@ -509,6 +509,60 @@ func (m *mockGitHubPR) AddLabel(ctx context.Context, repo string, id int, label 
 	return nil
 }
 
+// mockGitHubLinkedPRs extends mockGitHub with linked PR support for issue filtering tests.
+type mockGitHubLinkedPRs struct {
+	mockGitHub
+	linkedPRs map[int][]domain.PullRequest // issue number -> linked PRs
+}
+
+func (m *mockGitHubLinkedPRs) FetchLinkedPullRequests(ctx context.Context, repo string, issueNumber int) ([]domain.PullRequest, error) {
+	if prs, ok := m.linkedPRs[issueNumber]; ok {
+		return prs, nil
+	}
+	return nil, nil
+}
+
+func TestIssueWithOpenPRNotDispatched(t *testing.T) {
+	cfg := &config.Config{
+		GitHub: config.GitHubConfig{
+			Token: "tok", Repos: []string{"o/r"}, EligibleLabels: []string{"gopilot"},
+		},
+		Polling: config.PollingConfig{IntervalMS: 1000, MaxConcurrentAgents: 5},
+		Agent: config.AgentConfig{
+			Command: "mock", TurnTimeoutMS: 60000, StallTimeoutMS: 60000,
+			MaxRetries: 3, MaxRetryBackoffMS: 1000, MaxAutopilotContinues: 5,
+		},
+		Workspace: config.WorkspaceConfig{Root: t.TempDir(), HookTimeoutMS: 5000},
+		Prompt:    "Work on {{ .Issue.Title }}",
+	}
+
+	gh := &mockGitHubLinkedPRs{
+		mockGitHub: mockGitHub{
+			issues: []domain.Issue{
+				{ID: 1, Repo: "o/r", Title: "Has PR", Labels: []string{"gopilot"}, Status: "Todo", Priority: 1, CreatedAt: time.Now()},
+				{ID: 2, Repo: "o/r", Title: "No PR", Labels: []string{"gopilot"}, Status: "Todo", Priority: 2, CreatedAt: time.Now()},
+			},
+		},
+		linkedPRs: map[int][]domain.PullRequest{
+			1: {{Number: 10, State: "open", Repo: "o/r"}},
+		},
+	}
+	ag := &mockAgent{}
+	orch := NewOrchestrator(cfg, gh, map[string]agent.Runner{"mock": ag})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	orch.Tick(ctx)
+
+	// Only issue 2 should be dispatched; issue 1 has an open PR
+	if ag.started != 1 {
+		t.Errorf("started = %d, want 1 (issue with open PR should be skipped)", ag.started)
+	}
+	if orch.state.RunningCount() != 1 {
+		t.Errorf("running = %d, want 1", orch.state.RunningCount())
+	}
+}
+
 func TestMonitorPRsDisabledByDefault(t *testing.T) {
 	cfg := &config.Config{
 		GitHub: config.GitHubConfig{
