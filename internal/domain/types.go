@@ -39,6 +39,9 @@ type Issue struct {
 	// Pull requests
 	LinkedPRs []PullRequest // Pull requests linked to this issue
 
+	// Branch overrides the default {{branch}} hook variable when set.
+	Branch string
+
 	// Timestamps
 	CreatedAt time.Time
 	UpdatedAt time.Time
