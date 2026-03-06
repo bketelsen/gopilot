@@ -68,13 +68,13 @@ func (rt *Routes) createSession(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(sess)
+	json.NewEncoder(w).Encode(sess) //nolint:errcheck // HTTP response write
 }
 
-func (rt *Routes) listSessions(w http.ResponseWriter, r *http.Request) {
+func (rt *Routes) listSessions(w http.ResponseWriter, _ *http.Request) {
 	sessions := rt.mgr.List()
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{
+	json.NewEncoder(w).Encode(map[string]any{ //nolint:errcheck // HTTP response write
 		"sessions": sessions,
 	})
 }
@@ -145,7 +145,7 @@ func (rt *Routes) createOutput(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(result)
+	json.NewEncoder(w).Encode(result) //nolint:errcheck // HTTP response write
 }
 
 func (rt *Routes) createIssuesFromPlan(ctx context.Context, sess *Session, plan *Plan) (int, error) {

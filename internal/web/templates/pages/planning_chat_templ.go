@@ -53,7 +53,7 @@ func PlanningChat(session *planning.Session) templ.Component {
 			var templ_7745c5c3_Var3 string
 			templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinStringErrs(session.Repo)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates/pages/planning_chat.templ`, Line: 14, Col: 49}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `workspaces/gopilot/issue-1000027/internal/web/templates/pages/planning_chat.templ`, Line: 14, Col: 49}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
 			if templ_7745c5c3_Err != nil {
@@ -66,7 +66,7 @@ func PlanningChat(session *planning.Session) templ.Component {
 			var templ_7745c5c3_Var4 string
 			templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(string(session.Status))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates/pages/planning_chat.templ`, Line: 30, Col: 30}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `workspaces/gopilot/issue-1000027/internal/web/templates/pages/planning_chat.templ`, Line: 30, Col: 30}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 			if templ_7745c5c3_Err != nil {

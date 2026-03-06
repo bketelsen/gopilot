@@ -59,7 +59,7 @@ func IssueDetail(running *domain.RunEntry, history []domain.CompletedRun, issueI
 				var templ_7745c5c3_Var3 string
 				templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinStringErrs(running.Issue.Title)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates/pages/issue_detail.templ`, Line: 14, Col: 57}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `workspaces/gopilot/issue-1000027/internal/web/templates/pages/issue_detail.templ`, Line: 14, Col: 57}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
 				if templ_7745c5c3_Err != nil {
@@ -72,7 +72,7 @@ func IssueDetail(running *domain.RunEntry, history []domain.CompletedRun, issueI
 				var templ_7745c5c3_Var4 string
 				templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(running.Issue.Identifier())
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates/pages/issue_detail.templ`, Line: 15, Col: 65}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `workspaces/gopilot/issue-1000027/internal/web/templates/pages/issue_detail.templ`, Line: 15, Col: 65}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 				if templ_7745c5c3_Err != nil {
@@ -90,7 +90,7 @@ func IssueDetail(running *domain.RunEntry, history []domain.CompletedRun, issueI
 					var templ_7745c5c3_Var5 string
 					templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates/pages/issue_detail.templ`, Line: 18, Col: 121}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `workspaces/gopilot/issue-1000027/internal/web/templates/pages/issue_detail.templ`, Line: 18, Col: 121}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
 					if templ_7745c5c3_Err != nil {
@@ -108,7 +108,7 @@ func IssueDetail(running *domain.RunEntry, history []domain.CompletedRun, issueI
 				var templ_7745c5c3_Var6 string
 				templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", running.Issue.Priority))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates/pages/issue_detail.templ`, Line: 23, Col: 99}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `workspaces/gopilot/issue-1000027/internal/web/templates/pages/issue_detail.templ`, Line: 23, Col: 99}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
 				if templ_7745c5c3_Err != nil {
@@ -121,7 +121,7 @@ func IssueDetail(running *domain.RunEntry, history []domain.CompletedRun, issueI
 				var templ_7745c5c3_Var7 string
 				templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", running.Attempt))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates/pages/issue_detail.templ`, Line: 24, Col: 91}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `workspaces/gopilot/issue-1000027/internal/web/templates/pages/issue_detail.templ`, Line: 24, Col: 91}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
 				if templ_7745c5c3_Err != nil {
@@ -134,7 +134,7 @@ func IssueDetail(running *domain.RunEntry, history []domain.CompletedRun, issueI
 				var templ_7745c5c3_Var8 string
 				templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("agent-output-%d", issueID))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates/pages/issue_detail.templ`, Line: 39, Col: 56}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `workspaces/gopilot/issue-1000027/internal/web/templates/pages/issue_detail.templ`, Line: 39, Col: 56}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
 				if templ_7745c5c3_Err != nil {
@@ -153,7 +153,7 @@ func IssueDetail(running *domain.RunEntry, history []domain.CompletedRun, issueI
 						var templ_7745c5c3_Var9 string
 						templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.JoinStringErrs(line)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates/pages/issue_detail.templ`, Line: 45, Col: 34}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `workspaces/gopilot/issue-1000027/internal/web/templates/pages/issue_detail.templ`, Line: 45, Col: 34}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var9))
 						if templ_7745c5c3_Err != nil {
@@ -177,7 +177,7 @@ func IssueDetail(running *domain.RunEntry, history []domain.CompletedRun, issueI
 				var templ_7745c5c3_Var10 string
 				templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%s#%d", repo, issueID))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates/pages/issue_detail.templ`, Line: 52, Col: 73}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `workspaces/gopilot/issue-1000027/internal/web/templates/pages/issue_detail.templ`, Line: 52, Col: 73}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var10))
 				if templ_7745c5c3_Err != nil {
@@ -206,7 +206,7 @@ func IssueDetail(running *domain.RunEntry, history []domain.CompletedRun, issueI
 				var templ_7745c5c3_Var11 string
 				templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinStringErrs(run.SessionID)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates/pages/issue_detail.templ`, Line: 78, Col: 64}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `workspaces/gopilot/issue-1000027/internal/web/templates/pages/issue_detail.templ`, Line: 78, Col: 64}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var11))
 				if templ_7745c5c3_Err != nil {
@@ -219,7 +219,7 @@ func IssueDetail(running *domain.RunEntry, history []domain.CompletedRun, issueI
 				var templ_7745c5c3_Var12 string
 				templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", run.Attempt))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates/pages/issue_detail.templ`, Line: 79, Col: 63}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `workspaces/gopilot/issue-1000027/internal/web/templates/pages/issue_detail.templ`, Line: 79, Col: 63}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var12))
 				if templ_7745c5c3_Err != nil {
@@ -232,7 +232,7 @@ func IssueDetail(running *domain.RunEntry, history []domain.CompletedRun, issueI
 				var templ_7745c5c3_Var13 string
 				templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinStringErrs(FormatDuration(run.Duration))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates/pages/issue_detail.templ`, Line: 80, Col: 61}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `workspaces/gopilot/issue-1000027/internal/web/templates/pages/issue_detail.templ`, Line: 80, Col: 61}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var13))
 				if templ_7745c5c3_Err != nil {
@@ -255,7 +255,7 @@ func IssueDetail(running *domain.RunEntry, history []domain.CompletedRun, issueI
 					var templ_7745c5c3_Var14 string
 					templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", run.ExitCode))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates/pages/issue_detail.templ`, Line: 85, Col: 71}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `workspaces/gopilot/issue-1000027/internal/web/templates/pages/issue_detail.templ`, Line: 85, Col: 71}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var14))
 					if templ_7745c5c3_Err != nil {
@@ -273,7 +273,7 @@ func IssueDetail(running *domain.RunEntry, history []domain.CompletedRun, issueI
 				var templ_7745c5c3_Var15 string
 				templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.JoinStringErrs(run.Error)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates/pages/issue_detail.templ`, Line: 88, Col: 55}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `workspaces/gopilot/issue-1000027/internal/web/templates/pages/issue_detail.templ`, Line: 88, Col: 55}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var15))
 				if templ_7745c5c3_Err != nil {

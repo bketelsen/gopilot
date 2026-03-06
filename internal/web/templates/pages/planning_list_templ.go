@@ -65,7 +65,7 @@ func PlanningList(sessions []*planning.Session, repos []string) templ.Component 
 				var templ_7745c5c3_Var3 templ.SafeURL
 				templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(fmt.Sprintf("/planning/%s", sess.ID)))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates/pages/planning_list.templ`, Line: 29, Col: 66}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `workspaces/gopilot/issue-1000027/internal/web/templates/pages/planning_list.templ`, Line: 29, Col: 66}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
 				if templ_7745c5c3_Err != nil {
@@ -78,7 +78,7 @@ func PlanningList(sessions []*planning.Session, repos []string) templ.Component 
 				var templ_7745c5c3_Var4 string
 				templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(sess.Repo)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates/pages/planning_list.templ`, Line: 33, Col: 44}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `workspaces/gopilot/issue-1000027/internal/web/templates/pages/planning_list.templ`, Line: 33, Col: 44}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 				if templ_7745c5c3_Err != nil {
@@ -96,7 +96,7 @@ func PlanningList(sessions []*planning.Session, repos []string) templ.Component 
 					var templ_7745c5c3_Var5 string
 					templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", *sess.LinkedIssue))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates/pages/planning_list.templ`, Line: 35, Col: 89}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `workspaces/gopilot/issue-1000027/internal/web/templates/pages/planning_list.templ`, Line: 35, Col: 89}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
 					if templ_7745c5c3_Err != nil {
@@ -114,7 +114,7 @@ func PlanningList(sessions []*planning.Session, repos []string) templ.Component 
 				var templ_7745c5c3_Var6 string
 				templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(string(sess.Status))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates/pages/planning_list.templ`, Line: 40, Col: 30}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `workspaces/gopilot/issue-1000027/internal/web/templates/pages/planning_list.templ`, Line: 40, Col: 30}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
 				if templ_7745c5c3_Err != nil {
@@ -127,7 +127,7 @@ func PlanningList(sessions []*planning.Session, repos []string) templ.Component 
 				var templ_7745c5c3_Var7 string
 				templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d messages", len(sess.Messages)))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates/pages/planning_list.templ`, Line: 43, Col: 57}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `workspaces/gopilot/issue-1000027/internal/web/templates/pages/planning_list.templ`, Line: 43, Col: 57}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
 				if templ_7745c5c3_Err != nil {
@@ -150,7 +150,7 @@ func PlanningList(sessions []*planning.Session, repos []string) templ.Component 
 				var templ_7745c5c3_Var8 string
 				templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinStringErrs(repo)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates/pages/planning_list.templ`, Line: 58, Col: 28}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `workspaces/gopilot/issue-1000027/internal/web/templates/pages/planning_list.templ`, Line: 58, Col: 28}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
 				if templ_7745c5c3_Err != nil {
@@ -163,7 +163,7 @@ func PlanningList(sessions []*planning.Session, repos []string) templ.Component 
 				var templ_7745c5c3_Var9 string
 				templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.JoinStringErrs(repo)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates/pages/planning_list.templ`, Line: 58, Col: 37}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `workspaces/gopilot/issue-1000027/internal/web/templates/pages/planning_list.templ`, Line: 58, Col: 37}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var9))
 				if templ_7745c5c3_Err != nil {

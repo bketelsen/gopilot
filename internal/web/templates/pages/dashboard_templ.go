@@ -133,7 +133,7 @@ func DashboardContent(running []*domain.RunEntry, retries []*domain.RetryEntry, 
 			var templ_7745c5c3_Var4 templ.SafeURL
 			templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(fmt.Sprintf("/issues/%s/%d", entry.Issue.Repo, entry.Issue.ID)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates/pages/dashboard.templ`, Line: 55, Col: 95}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `workspaces/gopilot/issue-1000027/internal/web/templates/pages/dashboard.templ`, Line: 55, Col: 95}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 			if templ_7745c5c3_Err != nil {
@@ -146,7 +146,7 @@ func DashboardContent(running []*domain.RunEntry, retries []*domain.RetryEntry, 
 			var templ_7745c5c3_Var5 string
 			templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(entry.Issue.Identifier())
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates/pages/dashboard.templ`, Line: 56, Col: 35}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `workspaces/gopilot/issue-1000027/internal/web/templates/pages/dashboard.templ`, Line: 56, Col: 35}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
 			if templ_7745c5c3_Err != nil {
@@ -159,7 +159,7 @@ func DashboardContent(running []*domain.RunEntry, retries []*domain.RetryEntry, 
 			var templ_7745c5c3_Var6 string
 			templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(entry.Issue.Repo)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates/pages/dashboard.templ`, Line: 59, Col: 47}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `workspaces/gopilot/issue-1000027/internal/web/templates/pages/dashboard.templ`, Line: 59, Col: 47}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
 			if templ_7745c5c3_Err != nil {
@@ -172,7 +172,7 @@ func DashboardContent(running []*domain.RunEntry, retries []*domain.RetryEntry, 
 			var templ_7745c5c3_Var7 string
 			templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(FormatDuration(entry.Duration()))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates/pages/dashboard.templ`, Line: 63, Col: 63}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `workspaces/gopilot/issue-1000027/internal/web/templates/pages/dashboard.templ`, Line: 63, Col: 63}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
 			if templ_7745c5c3_Err != nil {
@@ -185,7 +185,7 @@ func DashboardContent(running []*domain.RunEntry, retries []*domain.RetryEntry, 
 			var templ_7745c5c3_Var8 string
 			templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", entry.Attempt))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates/pages/dashboard.templ`, Line: 64, Col: 63}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `workspaces/gopilot/issue-1000027/internal/web/templates/pages/dashboard.templ`, Line: 64, Col: 63}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
 			if templ_7745c5c3_Err != nil {
@@ -198,7 +198,7 @@ func DashboardContent(running []*domain.RunEntry, retries []*domain.RetryEntry, 
 			var templ_7745c5c3_Var9 string
 			templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.JoinStringErrs(entry.GetLastEventAt().Format("15:04:05"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates/pages/dashboard.templ`, Line: 65, Col: 72}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `workspaces/gopilot/issue-1000027/internal/web/templates/pages/dashboard.templ`, Line: 65, Col: 72}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var9))
 			if templ_7745c5c3_Err != nil {
@@ -211,7 +211,7 @@ func DashboardContent(running []*domain.RunEntry, retries []*domain.RetryEntry, 
 			var templ_7745c5c3_Var10 string
 			templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.JoinStringErrs(entry.GetLastMessage())
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates/pages/dashboard.templ`, Line: 66, Col: 128}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `workspaces/gopilot/issue-1000027/internal/web/templates/pages/dashboard.templ`, Line: 66, Col: 128}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var10))
 			if templ_7745c5c3_Err != nil {
@@ -224,7 +224,7 @@ func DashboardContent(running []*domain.RunEntry, retries []*domain.RetryEntry, 
 			var templ_7745c5c3_Var11 string
 			templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinStringErrs(TruncateString(entry.GetLastMessage(), 60))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates/pages/dashboard.templ`, Line: 66, Col: 175}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `workspaces/gopilot/issue-1000027/internal/web/templates/pages/dashboard.templ`, Line: 66, Col: 175}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var11))
 			if templ_7745c5c3_Err != nil {
@@ -253,7 +253,7 @@ func DashboardContent(running []*domain.RunEntry, retries []*domain.RetryEntry, 
 			var templ_7745c5c3_Var12 string
 			templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.JoinStringErrs(entry.Identifier)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates/pages/dashboard.templ`, Line: 111, Col: 47}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `workspaces/gopilot/issue-1000027/internal/web/templates/pages/dashboard.templ`, Line: 111, Col: 47}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var12))
 			if templ_7745c5c3_Err != nil {
@@ -266,7 +266,7 @@ func DashboardContent(running []*domain.RunEntry, retries []*domain.RetryEntry, 
 			var templ_7745c5c3_Var13 string
 			templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", entry.Attempt))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates/pages/dashboard.templ`, Line: 112, Col: 63}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `workspaces/gopilot/issue-1000027/internal/web/templates/pages/dashboard.templ`, Line: 112, Col: 63}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var13))
 			if templ_7745c5c3_Err != nil {
@@ -279,7 +279,7 @@ func DashboardContent(running []*domain.RunEntry, retries []*domain.RetryEntry, 
 			var templ_7745c5c3_Var14 string
 			templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.JoinStringErrs(entry.DueAt.Format("15:04:05"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates/pages/dashboard.templ`, Line: 113, Col: 61}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `workspaces/gopilot/issue-1000027/internal/web/templates/pages/dashboard.templ`, Line: 113, Col: 61}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var14))
 			if templ_7745c5c3_Err != nil {
@@ -292,7 +292,7 @@ func DashboardContent(running []*domain.RunEntry, retries []*domain.RetryEntry, 
 			var templ_7745c5c3_Var15 string
 			templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.JoinStringErrs(entry.Error)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates/pages/dashboard.templ`, Line: 114, Col: 55}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `workspaces/gopilot/issue-1000027/internal/web/templates/pages/dashboard.templ`, Line: 114, Col: 55}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var15))
 			if templ_7745c5c3_Err != nil {
@@ -339,7 +339,7 @@ func SummaryCard(title, value string) templ.Component {
 		var templ_7745c5c3_Var17 string
 		templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinStringErrs(title)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates/pages/dashboard.templ`, Line: 125, Col: 63}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `workspaces/gopilot/issue-1000027/internal/web/templates/pages/dashboard.templ`, Line: 125, Col: 63}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var17))
 		if templ_7745c5c3_Err != nil {
@@ -352,7 +352,7 @@ func SummaryCard(title, value string) templ.Component {
 		var templ_7745c5c3_Var18 string
 		templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.JoinStringErrs(value)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates/pages/dashboard.templ`, Line: 126, Col: 46}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `workspaces/gopilot/issue-1000027/internal/web/templates/pages/dashboard.templ`, Line: 126, Col: 46}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var18))
 		if templ_7745c5c3_Err != nil {

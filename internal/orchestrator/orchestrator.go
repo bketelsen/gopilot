@@ -295,7 +295,7 @@ func (o *Orchestrator) agentForIssue(issue domain.Issue) agent.Runner {
 
 func (o *Orchestrator) stopSession(sess *agent.Session) {
 	for _, runner := range o.agents {
-		runner.Stop(sess)
+		runner.Stop(sess) //nolint:errcheck // best-effort stop
 		return
 	}
 }
@@ -379,7 +379,7 @@ func (o *Orchestrator) dispatch(ctx context.Context, issue domain.Issue, attempt
 		StartedAt:   now,
 		LastEventAt: now,
 		Attempt:     attempt,
-		OutputLines: domain.NewRingBuffer(50),
+		OutputLines: domain.NewRingBuffer(outputBufferSize),
 	}
 	o.state.AddRunning(issue.ID, entry)
 
@@ -526,7 +526,7 @@ func (o *Orchestrator) detectStalls(ctx context.Context) {
 			if o.state.IsPlanning(entry.Issue.ID) {
 				comment += "\n\n" + PlanningCommentMarker
 			}
-			o.github.AddComment(ctx, entry.Issue.Repo, entry.Issue.ID, comment)
+			o.github.AddComment(ctx, entry.Issue.Repo, entry.Issue.ID, comment) //nolint:errcheck // best-effort comment
 
 			if entry.Attempt < o.cfg.Agent.MaxRetries {
 				maxBackoff := time.Duration(o.cfg.Agent.MaxRetryBackoffMS) * time.Millisecond
@@ -581,10 +581,10 @@ func (o *Orchestrator) stopAndCleanup(ctx context.Context, entry *domain.RunEntr
 	o.state.RemoveRunning(entry.Issue.ID)
 	o.state.Release(entry.Issue.ID)
 
-	o.workspace.RunHook(ctx, "after_run", o.workspace.Path(entry.Issue), entry.Issue)
+	o.workspace.RunHook(ctx, "after_run", o.workspace.Path(entry.Issue), entry.Issue) //nolint:errcheck // best-effort hook
 
 	if removeWorkspace {
-		o.workspace.Cleanup(ctx, entry.Issue)
+		o.workspace.Cleanup(ctx, entry.Issue) //nolint:errcheck // best-effort cleanup
 	}
 }
 
@@ -603,8 +603,8 @@ func (o *Orchestrator) handleMaxRetriesExceeded(issue domain.Issue, lastError st
 	if o.state.IsPlanning(issue.ID) {
 		comment += "\n\n" + PlanningCommentMarker
 	}
-	o.github.AddComment(context.Background(), issue.Repo, issue.ID, comment)
-	o.github.AddLabel(context.Background(), issue.Repo, issue.ID, "gopilot-failed")
+	o.github.AddComment(context.Background(), issue.Repo, issue.ID, comment) //nolint:errcheck // best-effort comment
+	o.github.AddLabel(context.Background(), issue.Repo, issue.ID, "gopilot-failed") //nolint:errcheck // best-effort label
 }
 
 // SetRateLimitFunc sets a function to query GitHub API rate limit.
