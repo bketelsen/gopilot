@@ -10,6 +10,7 @@ import (
 	"github.com/bketelsen/gopilot/internal/config"
 	"github.com/bketelsen/gopilot/internal/domain"
 	"github.com/bketelsen/gopilot/internal/planning"
+	"github.com/bketelsen/gopilot/internal/skills"
 	"github.com/bketelsen/gopilot/internal/web/templates/pages"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -50,6 +51,7 @@ type Server struct {
 	retries        RetryProvider
 	planning       PlanningProvider
 	planningMgr    *planning.Manager
+	skills         []*skills.Skill
 	triggerRefresh func()
 }
 
@@ -249,9 +251,18 @@ func (s *Server) handleSettingsPage(w http.ResponseWriter, r *http.Request) {
 	if s.metrics != nil {
 		m = s.metrics.All()
 	}
+	var skillDisplays []pages.SkillDisplay
+	for _, sk := range s.skills {
+		skillDisplays = append(skillDisplays, pages.SkillDisplay{
+			Name:        sk.Name,
+			Type:        sk.Type,
+			Description: sk.Description,
+		})
+	}
+
 	data := pages.SettingsData{
 		Config:        s.cfg,
-		Skills:        nil, // TODO: wire skills provider
+		Skills:        skillDisplays,
 		AgentValid:    agentValid,
 		RateRemaining: int(m["github_rate_limit_remaining"]),
 		RateLimit:     int(m["github_rate_limit_limit"]),
@@ -288,6 +299,11 @@ func (s *Server) handlePlanningChatPage(w http.ResponseWriter, r *http.Request) 
 func isCommandAvailable(name string) bool {
 	_, err := exec.LookPath(name)
 	return err == nil
+}
+
+// SetSkills sets the loaded skills for display on the settings page.
+func (s *Server) SetSkills(sk []*skills.Skill) {
+	s.skills = sk
 }
 
 // SetRefreshFunc sets the callback invoked by POST /api/v1/refresh.
