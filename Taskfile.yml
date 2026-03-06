@@ -37,9 +37,9 @@ tasks:
       - go test -race ./...
 
   lint:
-    desc: Run go vet
+    desc: Run golangci-lint
     cmds:
-      - go vet ./...
+      - golangci-lint run ./...
 
   clean:
     desc: Remove build artifacts

@@ -57,7 +57,7 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request, sessio
 		slog.Error("websocket accept failed", "error", err)
 		return
 	}
-	defer conn.CloseNow()
+	defer conn.CloseNow() //nolint:errcheck // best-effort close on exit
 
 	ctx := r.Context()
 
@@ -93,7 +93,12 @@ func (h *Handler) runAgentTurn(ctx context.Context, conn *websocket.Conn, sess *
 	prompt := h.buildPrompt(sess)
 
 	wsDir := filepath.Join(h.cfg.WorkspaceRoot, sess.ID)
-	os.MkdirAll(wsDir, 0755)
+	if err := os.MkdirAll(wsDir, 0755); err != nil {
+		slog.Error("failed to create workspace dir", "path", wsDir, "error", err)
+		writeJSON(ctx, conn, WSMessage{Type: "error", Content: fmt.Sprintf("workspace setup failed: %v", err)})
+		sess.SetStatus(StatusFailed)
+		return
+	}
 
 	pr, pw := io.Pipe()
 
@@ -197,7 +202,7 @@ func (h *Handler) buildPrompt(sess *Session) string {
 
 func writeJSON(ctx context.Context, conn *websocket.Conn, msg WSMessage) {
 	data, _ := json.Marshal(msg)
-	conn.Write(ctx, websocket.MessageText, data)
+	conn.Write(ctx, websocket.MessageText, data) //nolint:errcheck // best-effort websocket write
 }
 
 func readJSON(ctx context.Context, conn *websocket.Conn, msg *WSMessage) error {
