@@ -54,6 +54,30 @@ func TestParsePlan(t *testing.T) {
 	}
 }
 
+func TestParsePlan_SkipsEmptyPhases(t *testing.T) {
+	markdown := `## Plan: My Plan
+### Phase 1: Real Work
+- [ ] Do something (complexity: M)
+### Key Design Decisions
+Some notes here, no tasks.
+### Phase 2: More Work
+- [ ] Another task (complexity: S)
+`
+	plan, err := planning.ParsePlan(markdown)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(plan.Phases) != 2 {
+		t.Fatalf("expected 2 phases (empty one filtered), got %d", len(plan.Phases))
+	}
+	if plan.Phases[0].Name != "Real Work" {
+		t.Errorf("expected 'Real Work', got %q", plan.Phases[0].Name)
+	}
+	if plan.Phases[1].Name != "More Work" {
+		t.Errorf("expected 'More Work', got %q", plan.Phases[1].Name)
+	}
+}
+
 func TestParsePlan_NoTitle(t *testing.T) {
 	_, err := planning.ParsePlan("just some text")
 	if err == nil {

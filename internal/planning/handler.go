@@ -64,7 +64,13 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request, sessio
 	// Replay existing messages for reconnect
 	sess.mu.Lock()
 	for _, msg := range sess.Messages {
-		writeJSON(ctx, conn, WSMessage{Type: msg.Role, Content: msg.Content})
+		if msg.Role == "agent" && len(msg.Events) > 0 {
+			for _, event := range msg.Events {
+				writeJSON(ctx, conn, WSMessage{Type: "agent_event", Content: string(event)})
+			}
+		} else {
+			writeJSON(ctx, conn, WSMessage{Type: msg.Role, Content: msg.Content})
+		}
 	}
 	sess.mu.Unlock()
 
@@ -121,18 +127,78 @@ func (h *Handler) runAgentTurn(ctx context.Context, conn *websocket.Conn, sess *
 	slog.Info("planning agent started", "session", sess.ID, "pid", agentSess.PID)
 
 	var fullResponse strings.Builder
+	var events []json.RawMessage
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
 		scanner := bufio.NewScanner(pr)
 		for scanner.Scan() {
 			line := scanner.Text()
-			fullResponse.WriteString(line)
-			fullResponse.WriteString("\n")
 			if strings.TrimSpace(line) == "" {
 				continue
 			}
-			writeJSON(ctx, conn, WSMessage{Type: "agent", Content: line})
+
+			// Try to parse as JSON (Claude stream-json)
+			var raw map[string]any
+			if err := json.Unmarshal([]byte(line), &raw); err != nil {
+				// Not JSON — plain text fallback (e.g. Copilot)
+				fullResponse.WriteString(line)
+				fullResponse.WriteString("\n")
+				writeJSON(ctx, conn, WSMessage{Type: "agent", Content: line})
+				continue
+			}
+
+			eventType, _ := raw["type"].(string)
+
+			// Filter noise
+			switch eventType {
+			case "system", "rate_limit_event":
+				continue
+			}
+
+			// Transform and forward kept events
+			out := map[string]any{"source": "claude", "type": eventType}
+
+			switch eventType {
+			case "assistant":
+				// Flatten message.content into content_blocks
+				if msg, ok := raw["message"].(map[string]any); ok {
+					if content, ok := msg["content"].([]any); ok {
+						out["content_blocks"] = content
+						// Extract text for fullResponse
+						for _, block := range content {
+							if b, ok := block.(map[string]any); ok {
+								if b["type"] == "text" {
+									if text, ok := b["text"].(string); ok {
+										fullResponse.WriteString(text)
+										fullResponse.WriteString("\n")
+									}
+								}
+							}
+						}
+					}
+				}
+			case "tool_result":
+				out["tool_use_id"] = raw["tool_use_id"]
+				out["content"] = raw["content"]
+			case "result":
+				for _, key := range []string{"subtype", "duration_ms", "num_turns", "total_cost_usd", "usage", "result"} {
+					if v, ok := raw[key]; ok {
+						out[key] = v
+					}
+				}
+			default:
+				// Unknown type — forward as-is with source tag
+				raw["source"] = "claude"
+				out = raw
+			}
+
+			eventJSON, err := json.Marshal(out)
+			if err != nil {
+				continue
+			}
+			events = append(events, json.RawMessage(eventJSON))
+			writeJSON(ctx, conn, WSMessage{Type: "agent_event", Content: string(eventJSON)})
 		}
 	}()
 
@@ -148,7 +214,9 @@ func (h *Handler) runAgentTurn(ctx context.Context, conn *websocket.Conn, sess *
 	}
 
 	response := strings.TrimSpace(fullResponse.String())
-	if response != "" {
+	if len(events) > 0 {
+		sess.AddAgentMessage(response, events)
+	} else if response != "" {
 		sess.AddMessage("agent", response)
 	}
 

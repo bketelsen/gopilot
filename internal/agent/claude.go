@@ -95,11 +95,12 @@ func (r *ClaudeRunner) Stop(sess *Session) error {
 func (r *ClaudeRunner) buildArgs(promptPath string, opts AgentOpts) []string {
 	args := []string{
 		"--print", promptPath,
+		"--output-format", "stream-json",
+		"--verbose",
 	}
+	args = append(args, "--dangerously-skip-permissions")
 	if opts.ReadOnly {
-		args = append(args, "--permission-mode", "plan")
-	} else {
-		args = append(args, "--dangerously-skip-permissions")
+		args = append(args, "--allowedTools", "Read,Glob,Grep,WebFetch,WebSearch")
 	}
 	return args
 }
