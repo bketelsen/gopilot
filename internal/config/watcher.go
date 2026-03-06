@@ -23,12 +23,12 @@ func Watch(ctx context.Context, path string, cb ReloadCallback) (*Watcher, error
 	}
 
 	if err := fsw.Add(path); err != nil {
-		fsw.Close()
+		fsw.Close() //nolint:errcheck // cleanup on error path
 		return nil, err
 	}
 
 	go func() {
-		defer fsw.Close()
+		defer fsw.Close() //nolint:errcheck // best-effort close on goroutine exit
 		for {
 			select {
 			case <-ctx.Done():

@@ -639,8 +639,10 @@ var closesRegex = regexp.MustCompile(`(?i)(?:closes|fixes|resolves)\s+#(\d+)`)
 func parseClosesIssue(body string) int {
 	matches := closesRegex.FindStringSubmatch(body)
 	if len(matches) >= 2 {
-		var id int
-		fmt.Sscanf(matches[1], "%d", &id)
+		id, err := strconv.Atoi(matches[1])
+		if err != nil {
+			return 0
+		}
 		return id
 	}
 	return 0
