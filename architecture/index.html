@@ -1,0 +1,1201 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="An AI agent orchestrator for GitHub Issues">
+      
+      
+      
+        <link rel="canonical" href="https://bketelsen.github.io/gopilot/architecture/">
+      
+      
+        <link rel="prev" href="../cli/">
+      
+      
+        <link rel="next" href="../dashboard/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.4">
+    
+    
+      
+        <title>Architecture - Gopilot</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#architecture" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Gopilot" class="md-header__button md-logo" aria-label="Gopilot" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Gopilot
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Architecture
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/bketelsen/gopilot" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    bketelsen/gopilot
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href=".." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../getting-started/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Getting Started
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../configuration/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Configuration
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../skills/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Writing Skills
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../cli/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  CLI Reference
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    <li class="md-tabs__item md-tabs__item--active">
+      <a href="./" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Architecture
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../dashboard/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Dashboard
+
+      </a>
+    </li>
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Gopilot" class="md-nav__button md-logo" aria-label="Gopilot" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Gopilot
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/bketelsen/gopilot" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    bketelsen/gopilot
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../skills/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Writing Skills
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#system-overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        System Overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#poll-dispatch-reconcile-loop" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Poll-Dispatch-Reconcile Loop
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Poll-Dispatch-Reconcile Loop">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#poll" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Poll
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#dispatch" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Dispatch
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#reconcile" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reconcile
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#agent-output-capture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Agent Output Capture
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stall-detection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stall Detection
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#retry" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Retry
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#key-interfaces" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key Interfaces
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#state-management" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        State Management
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#config-hot-reload" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Config Hot-Reload
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#package-layout" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Package Layout
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../dashboard/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dashboard
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#system-overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        System Overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#poll-dispatch-reconcile-loop" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Poll-Dispatch-Reconcile Loop
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Poll-Dispatch-Reconcile Loop">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#poll" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Poll
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#dispatch" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Dispatch
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#reconcile" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reconcile
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#agent-output-capture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Agent Output Capture
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stall-detection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stall Detection
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#retry" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Retry
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#key-interfaces" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key Interfaces
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#state-management" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        State Management
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#config-hot-reload" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Config Hot-Reload
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#package-layout" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Package Layout
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+    <a href="https://github.com/bketelsen/gopilot/edit/main/docs/architecture.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
+    </a>
+  
+  
+
+
+<h1 id="architecture">Architecture</h1>
+<h2 id="system-overview">System Overview</h2>
+<p>Gopilot is an orchestrator that dispatches AI coding agents (GitHub Copilot CLI, Claude Code CLI) to work on GitHub issues. It polls for eligible issues, claims them, creates workspaces, renders prompts with injected skills, runs agents as subprocesses, and monitors them with retry and stall detection.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>┌─────────────────────────────────────────────────────────────┐
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>│                        GOPILOT                              │
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>│                                                             │
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>│  ┌──────────┐  ┌──────────────┐  ┌───────────────────────┐  │
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>│  │ Skill    │  │   GitHub     │  │    Orchestrator       │  │
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>│  │ Loader   │──│   Client     │──│  (poll/dispatch/       │  │
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>│  │          │  │              │  │   reconcile loop)     │  │
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>│  └──────────┘  └──────────────┘  └───────────┬───────────┘  │
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>│                                              │              │
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>│  ┌──────────┐  ┌──────────────┐  ┌───────────┴───────────┐  │
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>│  │ Prompt   │  │  Workspace   │  │    Agent Runner       │  │
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>│  │ Renderer │──│  Manager     │──│  (Copilot / Claude)   │  │
+<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>│  │          │  │              │  │                       │  │
+<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>│  └──────────┘  └──────────────┘  └───────────────────────┘  │
+<a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>│                                                             │
+<a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>│  ┌──────────────────────────────────────────────────────┐   │
+<a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>│  │              Web Dashboard (HTMX + SSE)              │   │
+<a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>│  └──────────────────────────────────────────────────────┘   │
+<a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>└─────────────────────────────────────────────────────────────┘
+<a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a>         │                              │
+<a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a>         ▼                              ▼
+<a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a>   GitHub API                    Agent subprocess
+<a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a>   (issues, PRs,                 (Copilot CLI or
+<a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a>    Projects v2)                  Claude Code)
+</code></pre></div>
+<h2 id="poll-dispatch-reconcile-loop">Poll-Dispatch-Reconcile Loop</h2>
+<p>The orchestrator runs a continuous loop with three phases, plus stall detection and retry logic.</p>
+<h3 id="poll">Poll</h3>
+<p>Fetches open issues from configured repos via GitHub REST API. Filters by <code>eligible_labels</code> and excludes issues matching <code>excluded_labels</code>. Issues already being worked on (tracked in in-memory state) are skipped. The number of concurrent agents is capped by the <code>max_concurrent_agents</code> setting.</p>
+<h3 id="dispatch">Dispatch</h3>
+<p>Once an eligible issue is found:</p>
+<ol>
+<li><strong>Claim</strong> -- Adds an "in-progress" label (or similar) to the issue so other Gopilot instances or humans know it is taken.</li>
+<li><strong>Create workspace</strong> -- Creates an isolated workspace directory on disk.</li>
+<li><strong>Run <code>after_create</code> hook</strong> -- Typically performs <code>git clone</code> of the repository into the workspace.</li>
+<li><strong>Run <code>before_run</code> hook</strong> -- Typically checks out a feature branch for the issue.</li>
+<li><strong>Render prompt</strong> -- Evaluates the prompt template with issue data and injected skills.</li>
+<li><strong>Launch agent</strong> -- Starts the agent subprocess (Copilot CLI or Claude Code) with the rendered prompt.</li>
+<li><strong>Monitor</strong> -- Spawns a background goroutine to watch agent output and lifecycle.</li>
+</ol>
+<h3 id="reconcile">Reconcile</h3>
+<p>On each poll cycle, the orchestrator checks all running agents against current issue state. Agents whose issues have been closed, reassigned, or had their eligible labels removed are stopped and their workspaces cleaned up.</p>
+<h3 id="agent-output-capture">Agent Output Capture</h3>
+<p>Agent stdout is captured via <code>io.Pipe</code> and scanned line by line. Each line updates the <code>RunEntry</code> fields (<code>LastMessage</code>, <code>LastEventAt</code>, <code>TurnCount</code>) thread-safely and is stored in a <code>RingBuffer</code> (last 50 lines). Per-issue SSE events (<code>agent-output-{id}</code>) are broadcast with HTML fragments so the dashboard can stream output in real time.</p>
+<h3 id="stall-detection">Stall Detection</h3>
+<p>The orchestrator monitors agent output continuously. If an agent has not emitted any stdout within <code>stall_timeout_ms</code>, it is considered stalled and its process is killed. Because <code>LastEventAt</code> is now updated on every output line, stall detection correctly resets whenever the agent is actively producing output.</p>
+<h3 id="retry">Retry</h3>
+<p>Failed agents enter a retry queue with exponential backoff. Each subsequent retry waits longer before re-dispatching. After <code>max_retries</code> attempts are exhausted, the issue is reset with a failure label so it can be triaged by a human.</p>
+<h2 id="key-interfaces">Key Interfaces</h2>
+<table>
+<thead>
+<tr>
+<th>Interface</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>github.Client</code></td>
+<td>GitHub REST and GraphQL operations including issue management, label manipulation, PR tracking, and rate limit tracking. Includes <code>FetchLabeledIssues</code> for sprint views and <code>FetchLinkedPullRequests</code> for PR status detection.</td>
+</tr>
+<tr>
+<td><code>workspace.Manager</code></td>
+<td>Workspace lifecycle management (create and remove directories) plus hook execution with variable interpolation. Implemented by <code>FSManager</code>.</td>
+</tr>
+<tr>
+<td><code>agent.Runner</code></td>
+<td>Agent launcher interface. <code>CopilotRunner</code> and <code>ClaudeRunner</code> implement this for their respective CLI tools, handling subprocess creation, output streaming, and termination.</td>
+</tr>
+<tr>
+<td><code>web.StateProvider</code></td>
+<td>Provides current agent state to the dashboard without creating circular imports between orchestrator and web packages.</td>
+</tr>
+<tr>
+<td><code>web.MetricsProvider</code></td>
+<td>Exposes token usage and cost data to the dashboard.</td>
+</tr>
+<tr>
+<td><code>web.RetryProvider</code></td>
+<td>Exposes retry queue state to the dashboard.</td>
+</tr>
+<tr>
+<td><code>web.SprintProvider</code></td>
+<td>Provides issue and PR data from GitHub for the sprint board view.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="state-management">State Management</h2>
+<p>All runtime state lives in-memory within <code>orchestrator.State</code>, protected by a <code>sync.RWMutex</code>. This includes the set of active agents, their associated issues, and event histories.</p>
+<p>GitHub serves as the source of truth. If Gopilot restarts, it has no persistent local state to recover. Instead, on the next poll cycle it re-discovers the current situation from GitHub: which issues are open, which labels are applied, and which issues need work. This design keeps the system simple and avoids state synchronization bugs.</p>
+<h2 id="config-hot-reload">Config Hot-Reload</h2>
+<p>Gopilot uses fsnotify to watch <code>gopilot.yaml</code> for changes. When the file is modified, the following settings are reloaded without restarting the process:</p>
+<ul>
+<li>Polling interval and batch size</li>
+<li>Concurrency limits (<code>max_concurrent_agents</code>)</li>
+<li>Agent configuration (type, timeout, stall detection)</li>
+<li>Skills configuration</li>
+<li>Prompt templates</li>
+</ul>
+<p>The following settings require a full restart to take effect:</p>
+<ul>
+<li>GitHub token</li>
+<li>Repository list</li>
+</ul>
+<h2 id="package-layout">Package Layout</h2>
+<table>
+<thead>
+<tr>
+<th>Package</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>cmd/gopilot/</code></td>
+<td>Entry point, wires everything together</td>
+</tr>
+<tr>
+<td><code>internal/orchestrator/</code></td>
+<td>Main loop, state management, retry queue</td>
+</tr>
+<tr>
+<td><code>internal/github/</code></td>
+<td>REST + GraphQL client, rate limit tracking</td>
+</tr>
+<tr>
+<td><code>internal/agent/</code></td>
+<td>Runner interface, Copilot/Claude subprocess adapters</td>
+</tr>
+<tr>
+<td><code>internal/workspace/</code></td>
+<td>Workspace creation, hook execution</td>
+</tr>
+<tr>
+<td><code>internal/web/</code></td>
+<td>Dashboard server, SSE hub, templ page templates</td>
+</tr>
+<tr>
+<td><code>internal/prompt/</code></td>
+<td>Prompt template rendering</td>
+</tr>
+<tr>
+<td><code>internal/skills/</code></td>
+<td>SKILL.md loader (frontmatter + markdown), injector</td>
+</tr>
+<tr>
+<td><code>internal/metrics/</code></td>
+<td>Token tracking and cost estimation</td>
+</tr>
+<tr>
+<td><code>internal/config/</code></td>
+<td>YAML config structs, loader, fsnotify watcher</td>
+</tr>
+<tr>
+<td><code>internal/planning/</code></td>
+<td>Dashboard-based interactive planning sessions (WebSocket chat, plan parser)</td>
+</tr>
+<tr>
+<td><code>internal/domain/</code></td>
+<td>Core types: Issue, RunEntry, CompletedRun, AgentEvent, RingBuffer</td>
+</tr>
+<tr>
+<td><code>components/</code></td>
+<td>Reusable templ UI components (button, card, dialog, etc.)</td>
+</tr>
+<tr>
+<td><code>skills/</code></td>
+<td>Runtime skill definitions (SKILL.md files)</td>
+</tr>
+</tbody>
+</table>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "search.suggest", "search.highlight", "content.code.copy", "content.action.edit"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>
