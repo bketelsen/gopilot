@@ -50,6 +50,7 @@ type WorkspaceConfig struct {
 type HooksConfig struct {
 	AfterCreate  string `yaml:"after_create"`
 	BeforeRun    string `yaml:"before_run"`
+	BeforePRFix  string `yaml:"before_pr_fix"`
 	AfterRun     string `yaml:"after_run"`
 	BeforeRemove string `yaml:"before_remove"`
 }

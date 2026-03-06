@@ -57,6 +57,11 @@ func (m *FSManager) RunHook(ctx context.Context, hook string, workspacePath stri
 	switch hook {
 	case "before_run":
 		script = m.cfg.Hooks.BeforeRun
+	case "before_pr_fix":
+		script = m.cfg.Hooks.BeforePRFix
+		if script == "" {
+			script = m.cfg.Hooks.BeforeRun
+		}
 	case "after_run":
 		script = m.cfg.Hooks.AfterRun
 	case "before_remove":

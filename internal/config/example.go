@@ -29,6 +29,10 @@ workspace:
     before_run: |
       git fetch origin
       git checkout -B gopilot/issue-{{issue_id}} origin/main
+    before_pr_fix: |
+      git fetch origin
+      git checkout {{branch}}
+      git pull origin {{branch}}
     after_run: ""
     before_remove: ""
 

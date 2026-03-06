@@ -95,6 +95,74 @@ func TestExpandHookVarsBranchDefault(t *testing.T) {
 	}
 }
 
+func TestRunHookBeforePRFix(t *testing.T) {
+	root := t.TempDir()
+	cfg := config.WorkspaceConfig{
+		Root:          root,
+		HookTimeoutMS: 5000,
+		Hooks: config.HooksConfig{
+			BeforeRun:   "echo before_run > hook_output.txt",
+			BeforePRFix: "echo branch={{branch}} > hook_output.txt",
+		},
+	}
+	mgr := NewFSManager(cfg)
+	issue := domain.Issue{ID: 99, Repo: "myorg/myrepo", Branch: "gopilot/issue-11"}
+
+	path, err := mgr.Ensure(context.Background(), issue)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = mgr.RunHook(context.Background(), "before_pr_fix", path, issue)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(path, "hook_output.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := strings.TrimSpace(string(data))
+	want := "branch=gopilot/issue-11"
+	if got != want {
+		t.Errorf("hook output = %q, want %q", got, want)
+	}
+}
+
+func TestRunHookBeforePRFixFallsBackToBeforeRun(t *testing.T) {
+	root := t.TempDir()
+	cfg := config.WorkspaceConfig{
+		Root:          root,
+		HookTimeoutMS: 5000,
+		Hooks: config.HooksConfig{
+			BeforeRun: "echo before_run > hook_output.txt",
+			// BeforePRFix is empty — should fall back to BeforeRun
+		},
+	}
+	mgr := NewFSManager(cfg)
+	issue := domain.Issue{ID: 99, Repo: "myorg/myrepo", Branch: "gopilot/issue-11"}
+
+	path, err := mgr.Ensure(context.Background(), issue)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = mgr.RunHook(context.Background(), "before_pr_fix", path, issue)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(path, "hook_output.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := strings.TrimSpace(string(data))
+	want := "before_run"
+	if got != want {
+		t.Errorf("hook output = %q, want %q (should fall back to before_run)", got, want)
+	}
+}
+
 func TestFSManagerHookExpansion(t *testing.T) {
 	root := t.TempDir()
 	cfg := config.WorkspaceConfig{
