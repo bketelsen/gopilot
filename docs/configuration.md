@@ -79,6 +79,7 @@ Shell commands executed at specific points in the workspace lifecycle. Each hook
 |-------|------|---------|-------------|
 | `after_create` | string | `""` | Runs after the workspace directory is created. Typically used to clone the repository. |
 | `before_run` | string | `""` | Runs before the agent subprocess starts. Typically used to set up a fresh branch. |
+| `before_pr_fix` | string | `""` | Runs before a PR fix agent starts. Falls back to `before_run` if empty. Use `{{branch}}` for the PR's head branch. |
 | `after_run` | string | `""` | Runs after the agent subprocess completes. |
 | `before_remove` | string | `""` | Runs before the workspace directory is removed. |
 
@@ -90,6 +91,7 @@ Hooks support the following interpolation variables:
 |----------|-------------|---------------|
 | `{{repo}}` | Full repository name | `myorg/backend` |
 | `{{issue_id}}` | Issue number | `42` |
+| `{{branch}}` | Branch name (PR head ref when set, otherwise `gopilot/issue-{id}`) | `gopilot/issue-42` |
 | `${GITHUB_TOKEN}` | Environment variable (standard shell expansion) | *(token value)* |
 
 #### Hook recipe: clone and branch
@@ -109,6 +111,21 @@ workspace:
     after_run: ""
     before_remove: ""
 ```
+
+#### Hook recipe: PR fix branch checkout
+
+When PR monitoring dispatches a fix agent, `before_pr_fix` checks out the existing PR branch instead of creating a new one:
+
+```yaml
+workspace:
+  hooks:
+    before_pr_fix: |
+      git fetch origin
+      git checkout {{branch}}
+      git pull origin {{branch}}
+```
+
+If `before_pr_fix` is not set, the `before_run` hook is used as a fallback.
 
 ---
 
