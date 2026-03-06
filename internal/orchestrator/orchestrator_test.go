@@ -563,6 +563,100 @@ func TestIssueWithOpenPRNotDispatched(t *testing.T) {
 	}
 }
 
+// mockGitHubSplitLinkedPRs extends mockGitHubSplit with linked PR support for reconciliation tests.
+type mockGitHubSplitLinkedPRs struct {
+	mockGitHubSplit
+	linkedPRs map[int][]domain.PullRequest
+}
+
+func (m *mockGitHubSplitLinkedPRs) FetchLinkedPullRequests(ctx context.Context, repo string, issueNumber int) ([]domain.PullRequest, error) {
+	if prs, ok := m.linkedPRs[issueNumber]; ok {
+		return prs, nil
+	}
+	return nil, nil
+}
+
+func TestReconcileStopsAgentWhenPROpened(t *testing.T) {
+	cfg := &config.Config{
+		GitHub: config.GitHubConfig{
+			Token: "tok", Repos: []string{"o/r"}, EligibleLabels: []string{"gopilot"},
+		},
+		Polling: config.PollingConfig{IntervalMS: 1000, MaxConcurrentAgents: 3},
+		Agent: config.AgentConfig{
+			Command: "mock", TurnTimeoutMS: 60000, StallTimeoutMS: 60000,
+			MaxRetries: 3, MaxRetryBackoffMS: 1000, MaxAutopilotContinues: 5,
+		},
+		Workspace: config.WorkspaceConfig{Root: t.TempDir(), HookTimeoutMS: 5000},
+		Prompt:    "Work",
+	}
+
+	issue := domain.Issue{ID: 1, Repo: "o/r", Labels: []string{"gopilot"}, Status: "Todo", Priority: 1}
+	gh := &mockGitHubSplitLinkedPRs{
+		mockGitHubSplit: mockGitHubSplit{
+			candidates: []domain.Issue{issue},
+			stateMap:   map[int]*domain.Issue{1: &issue},
+		},
+		linkedPRs: map[int][]domain.PullRequest{},
+	}
+	ag := &mockAgent{}
+	orch := NewOrchestrator(cfg, gh, map[string]agent.Runner{"mock": ag})
+
+	ctx := context.Background()
+	orch.Tick(ctx) // dispatch issue 1
+
+	if orch.state.RunningCount() != 1 {
+		t.Fatalf("running = %d, want 1 after dispatch", orch.state.RunningCount())
+	}
+
+	// Simulate PR being opened externally
+	gh.linkedPRs[1] = []domain.PullRequest{{Number: 42, State: "open", Repo: "o/r"}}
+
+	orch.reconcile(ctx)
+
+	if orch.state.RunningCount() != 0 {
+		t.Errorf("running = %d, want 0 after reconcile with open PR", orch.state.RunningCount())
+	}
+	if !orch.state.IsCompleted(1) {
+		t.Error("issue 1 should be marked completed after PR detected")
+	}
+}
+
+func TestIssueWithClosedPRStillDispatched(t *testing.T) {
+	cfg := &config.Config{
+		GitHub: config.GitHubConfig{
+			Token: "tok", Repos: []string{"o/r"}, EligibleLabels: []string{"gopilot"},
+		},
+		Polling: config.PollingConfig{IntervalMS: 1000, MaxConcurrentAgents: 5},
+		Agent: config.AgentConfig{
+			Command: "mock", TurnTimeoutMS: 60000, StallTimeoutMS: 60000,
+			MaxRetries: 3, MaxRetryBackoffMS: 1000, MaxAutopilotContinues: 5,
+		},
+		Workspace: config.WorkspaceConfig{Root: t.TempDir(), HookTimeoutMS: 5000},
+		Prompt:    "Work",
+	}
+
+	gh := &mockGitHubLinkedPRs{
+		mockGitHub: mockGitHub{
+			issues: []domain.Issue{
+				{ID: 1, Repo: "o/r", Title: "Has closed PR", Labels: []string{"gopilot"}, Status: "Todo", Priority: 1, CreatedAt: time.Now()},
+			},
+		},
+		linkedPRs: map[int][]domain.PullRequest{
+			1: {{Number: 10, State: "closed", Merged: true, Repo: "o/r"}},
+		},
+	}
+	ag := &mockAgent{}
+	orch := NewOrchestrator(cfg, gh, map[string]agent.Runner{"mock": ag})
+
+	ctx := context.Background()
+	orch.Tick(ctx)
+
+	// Issue with only closed/merged PRs should still be dispatched
+	if ag.started != 1 {
+		t.Errorf("started = %d, want 1 (closed PR should not block dispatch)", ag.started)
+	}
+}
+
 func TestMonitorPRsDisabledByDefault(t *testing.T) {
 	cfg := &config.Config{
 		GitHub: config.GitHubConfig{
