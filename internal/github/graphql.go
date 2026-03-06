@@ -191,7 +191,7 @@ func (c *GraphQLClient) SetProjectStatus(ctx context.Context, itemID string, sta
 
 // EnrichIssues enriches issues with Projects v2 data (priority, iteration, etc.).
 // This is a stub — full enrichment will be implemented later.
-func (c *GraphQLClient) EnrichIssues(ctx context.Context, issues []domain.Issue) ([]domain.Issue, error) {
+func (c *GraphQLClient) EnrichIssues(_ context.Context, issues []domain.Issue) ([]domain.Issue, error) {
 	if issues == nil || c.meta == nil {
 		return issues, nil
 	}

@@ -37,8 +37,6 @@ type State struct {
 	history   map[int][]domain.CompletedRun
 	completed map[int]bool
 	planning  map[int]*PlanningEntry
-	totals    domain.TokenTotals
-
 	// PR monitoring state (keyed by PR number)
 	prFixes   map[int]*domain.PRFixEntry
 	prRunning map[int]*domain.RunEntry
@@ -114,10 +112,10 @@ func (s *State) RunningCount() int {
 }
 
 // SlotsAvailable reports whether there is capacity for another agent.
-func (s *State) SlotsAvailable(max int) bool {
+func (s *State) SlotsAvailable(limit int) bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return len(s.running) < max
+	return len(s.running) < limit
 }
 
 // AllRunning returns a snapshot of all active run entries.

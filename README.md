@@ -66,7 +66,7 @@ Other useful commands:
 ```bash
 task dev       # Build and run
 task test      # Run tests with race detector
-task lint      # Run go vet
+task lint      # Run golangci-lint
 task clean     # Remove build artifacts
 ```
 
