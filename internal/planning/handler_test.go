@@ -196,12 +196,31 @@ func TestHandler_StreamJSONParsing(t *testing.T) {
 		t.Error("should not have received plain 'agent' messages for JSON input")
 	}
 
-	// Verify each event has source:"claude"
-	if len(agentEvents) > 0 {
-		var first map[string]any
-		json.Unmarshal([]byte(agentEvents[0]), &first)
-		if first["source"] != "claude" {
-			t.Errorf("expected source=claude, got %v", first["source"])
+	// Verify all events have source:"claude" and spot-check shapes
+	for i, e := range agentEvents {
+		var parsed map[string]any
+		json.Unmarshal([]byte(e), &parsed)
+		if parsed["source"] != "claude" {
+			t.Errorf("event[%d]: expected source=claude, got %v", i, parsed["source"])
+		}
+	}
+	// Verify tool_result carries tool_use_id
+	if len(agentEvents) >= 3 {
+		var toolResult map[string]any
+		json.Unmarshal([]byte(agentEvents[2]), &toolResult)
+		if toolResult["tool_use_id"] != "toolu_1" {
+			t.Errorf("tool_result missing tool_use_id, got: %v", toolResult["tool_use_id"])
+		}
+	}
+	// Verify result carries cherry-picked fields
+	if len(agentEvents) >= 4 {
+		var result map[string]any
+		json.Unmarshal([]byte(agentEvents[3]), &result)
+		if result["total_cost_usd"] == nil {
+			t.Error("result missing total_cost_usd")
+		}
+		if result["duration_ms"] == nil {
+			t.Error("result missing duration_ms")
 		}
 	}
 
