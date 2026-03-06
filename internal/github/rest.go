@@ -96,14 +96,14 @@ func (c *RESTClient) fetchRepoIssues(ctx context.Context, repo string) ([]domain
 	url := fmt.Sprintf("%srepos/%s/%s/issues?state=open&per_page=100", c.baseURL, owner, name)
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("fetch issues for %s: %w", repo, err)
 	}
 	req.Header.Set("Authorization", "token "+c.cfg.Token)
 	req.Header.Set("Accept", "application/vnd.github+json")
 
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("fetch issues for %s: %w", repo, err)
 	}
 	defer resp.Body.Close()
 	c.updateRateLimit(resp)
@@ -136,26 +136,26 @@ func (c *RESTClient) FetchIssueState(ctx context.Context, repo string, id int) (
 	url := fmt.Sprintf("%srepos/%s/%s/issues/%d", c.baseURL, parts[0], parts[1], id)
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("fetch issue state %s#%d: %w", repo, id, err)
 	}
 	req.Header.Set("Authorization", "token "+c.cfg.Token)
 	req.Header.Set("Accept", "application/vnd.github+json")
 
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("fetch issue state %s#%d: %w", repo, id, err)
 	}
 	defer resp.Body.Close()
 	c.updateRateLimit(resp)
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("GitHub API error %d: %s", resp.StatusCode, body)
+		return nil, fmt.Errorf("fetch issue state %s#%d: GitHub API error %d: %s", repo, id, resp.StatusCode, body)
 	}
 
 	var raw ghIssue
 	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("fetch issue state %s#%d: %w", repo, id, err)
 	}
 	issue := raw.toDomain(repo)
 	return &issue, nil
@@ -171,7 +171,7 @@ func (c *RESTClient) AddComment(ctx context.Context, repo string, id int, body s
 	payload := fmt.Sprintf(`{"body":%q}`, body)
 	req, err := http.NewRequestWithContext(ctx, "POST", url, strings.NewReader(payload))
 	if err != nil {
-		return err
+		return fmt.Errorf("add comment to %s#%d: %w", repo, id, err)
 	}
 	req.Header.Set("Authorization", "token "+c.cfg.Token)
 	req.Header.Set("Accept", "application/vnd.github+json")
@@ -179,14 +179,14 @@ func (c *RESTClient) AddComment(ctx context.Context, repo string, id int, body s
 
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return err
+		return fmt.Errorf("add comment to %s#%d: %w", repo, id, err)
 	}
 	defer resp.Body.Close()
 	c.updateRateLimit(resp)
 
 	if resp.StatusCode != http.StatusCreated {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("GitHub API error %d: %s", resp.StatusCode, body)
+		return fmt.Errorf("add comment to %s#%d: GitHub API error %d: %s", repo, id, resp.StatusCode, body)
 	}
 	return nil
 }
@@ -201,7 +201,7 @@ func (c *RESTClient) AddLabel(ctx context.Context, repo string, id int, label st
 	payload := fmt.Sprintf(`{"labels":[%q]}`, label)
 	req, err := http.NewRequestWithContext(ctx, "POST", url, strings.NewReader(payload))
 	if err != nil {
-		return err
+		return fmt.Errorf("add label %q to %s#%d: %w", label, repo, id, err)
 	}
 	req.Header.Set("Authorization", "token "+c.cfg.Token)
 	req.Header.Set("Accept", "application/vnd.github+json")
@@ -209,14 +209,14 @@ func (c *RESTClient) AddLabel(ctx context.Context, repo string, id int, label st
 
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return err
+		return fmt.Errorf("add label %q to %s#%d: %w", label, repo, id, err)
 	}
 	defer resp.Body.Close()
 	c.updateRateLimit(resp)
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("GitHub API error %d: %s", resp.StatusCode, body)
+		return fmt.Errorf("add label %q to %s#%d: GitHub API error %d: %s", label, repo, id, resp.StatusCode, body)
 	}
 	return nil
 }
@@ -266,14 +266,14 @@ func (c *RESTClient) FetchIssueComments(ctx context.Context, repo string, id int
 	url := fmt.Sprintf("%srepos/%s/%s/issues/%d/comments?per_page=100", c.baseURL, parts[0], parts[1], id)
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("fetch comments for %s#%d: %w", repo, id, err)
 	}
 	req.Header.Set("Authorization", "token "+c.cfg.Token)
 	req.Header.Set("Accept", "application/vnd.github+json")
 
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("fetch comments for %s#%d: %w", repo, id, err)
 	}
 	defer resp.Body.Close()
 	c.updateRateLimit(resp)
@@ -309,14 +309,14 @@ func (c *RESTClient) RemoveLabel(ctx context.Context, repo string, id int, label
 	url := fmt.Sprintf("%srepos/%s/%s/issues/%d/labels/%s", c.baseURL, parts[0], parts[1], id, neturl.PathEscape(label))
 	req, err := http.NewRequestWithContext(ctx, "DELETE", url, nil)
 	if err != nil {
-		return err
+		return fmt.Errorf("remove label %q from %s#%d: %w", label, repo, id, err)
 	}
 	req.Header.Set("Authorization", "token "+c.cfg.Token)
 	req.Header.Set("Accept", "application/vnd.github+json")
 
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return err
+		return fmt.Errorf("remove label %q from %s#%d: %w", label, repo, id, err)
 	}
 	defer resp.Body.Close()
 	c.updateRateLimit(resp)
@@ -338,13 +338,13 @@ func (c *RESTClient) CreateIssue(ctx context.Context, repo, title, body string, 
 	payload := map[string]any{"title": title, "body": body, "labels": labels}
 	jsonPayload, err := json.Marshal(payload)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("create issue in %s: %w", repo, err)
 	}
 
 	url := fmt.Sprintf("%srepos/%s/%s/issues", c.baseURL, parts[0], parts[1])
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(jsonPayload))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("create issue in %s: %w", repo, err)
 	}
 	req.Header.Set("Authorization", "token "+c.cfg.Token)
 	req.Header.Set("Accept", "application/vnd.github+json")
@@ -352,19 +352,19 @@ func (c *RESTClient) CreateIssue(ctx context.Context, repo, title, body string, 
 
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("create issue in %s: %w", repo, err)
 	}
 	defer resp.Body.Close()
 	c.updateRateLimit(resp)
 
 	if resp.StatusCode != http.StatusCreated {
 		respBody, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("GitHub API error %d: %s", resp.StatusCode, respBody)
+		return nil, fmt.Errorf("create issue in %s: GitHub API error %d: %s", repo, resp.StatusCode, respBody)
 	}
 
 	var raw ghIssue
 	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("create issue in %s: %w", repo, err)
 	}
 	issue := raw.toDomain(repo)
 	return &issue, nil
@@ -380,7 +380,7 @@ func (c *RESTClient) AddSubIssue(ctx context.Context, repo string, parentID, chi
 	url := fmt.Sprintf("%srepos/%s/%s/issues/%d/sub_issues", c.baseURL, parts[0], parts[1], parentID)
 	req, err := http.NewRequestWithContext(ctx, "POST", url, strings.NewReader(payload))
 	if err != nil {
-		return err
+		return fmt.Errorf("add sub-issue %d to %s#%d: %w", childID, repo, parentID, err)
 	}
 	req.Header.Set("Authorization", "token "+c.cfg.Token)
 	req.Header.Set("Accept", "application/vnd.github+json")
@@ -388,7 +388,7 @@ func (c *RESTClient) AddSubIssue(ctx context.Context, repo string, parentID, chi
 
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return err
+		return fmt.Errorf("add sub-issue %d to %s#%d: %w", childID, repo, parentID, err)
 	}
 	defer resp.Body.Close()
 	c.updateRateLimit(resp)
@@ -417,14 +417,14 @@ func (c *RESTClient) GetRepoLabel(ctx context.Context, repo string, name string)
 	url := fmt.Sprintf("%srepos/%s/%s/labels/%s", c.baseURL, parts[0], parts[1], neturl.PathEscape(name))
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get label %q from %s: %w", name, repo, err)
 	}
 	req.Header.Set("Authorization", "token "+c.cfg.Token)
 	req.Header.Set("Accept", "application/vnd.github+json")
 
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get label %q from %s: %w", name, repo, err)
 	}
 	defer resp.Body.Close()
 	c.updateRateLimit(resp)
@@ -434,12 +434,12 @@ func (c *RESTClient) GetRepoLabel(ctx context.Context, repo string, name string)
 	}
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("GitHub API error %d: %s", resp.StatusCode, body)
+		return nil, fmt.Errorf("get label %q from %s: GitHub API error %d: %s", name, repo, resp.StatusCode, body)
 	}
 
 	var label RepoLabel
 	if err := json.NewDecoder(resp.Body).Decode(&label); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get label %q from %s: %w", name, repo, err)
 	}
 	return &label, nil
 }
@@ -457,13 +457,13 @@ func (c *RESTClient) CreateRepoLabel(ctx context.Context, repo, name, color, des
 		"description": description,
 	})
 	if err != nil {
-		return err
+		return fmt.Errorf("create label %q in %s: %w", name, repo, err)
 	}
 
 	url := fmt.Sprintf("%srepos/%s/%s/labels", c.baseURL, parts[0], parts[1])
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(payload))
 	if err != nil {
-		return err
+		return fmt.Errorf("create label %q in %s: %w", name, repo, err)
 	}
 	req.Header.Set("Authorization", "token "+c.cfg.Token)
 	req.Header.Set("Accept", "application/vnd.github+json")
@@ -471,14 +471,14 @@ func (c *RESTClient) CreateRepoLabel(ctx context.Context, repo, name, color, des
 
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return err
+		return fmt.Errorf("create label %q in %s: %w", name, repo, err)
 	}
 	defer resp.Body.Close()
 	c.updateRateLimit(resp)
 
 	if resp.StatusCode != http.StatusCreated {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("GitHub API error %d: %s", resp.StatusCode, body)
+		return fmt.Errorf("create label %q in %s: GitHub API error %d: %s", name, repo, resp.StatusCode, body)
 	}
 	return nil
 }
@@ -495,13 +495,13 @@ func (c *RESTClient) UpdateRepoLabel(ctx context.Context, repo, name, color, des
 		"description": description,
 	})
 	if err != nil {
-		return err
+		return fmt.Errorf("update label %q in %s: %w", name, repo, err)
 	}
 
 	url := fmt.Sprintf("%srepos/%s/%s/labels/%s", c.baseURL, parts[0], parts[1], neturl.PathEscape(name))
 	req, err := http.NewRequestWithContext(ctx, "PATCH", url, bytes.NewReader(payload))
 	if err != nil {
-		return err
+		return fmt.Errorf("update label %q in %s: %w", name, repo, err)
 	}
 	req.Header.Set("Authorization", "token "+c.cfg.Token)
 	req.Header.Set("Accept", "application/vnd.github+json")
@@ -509,7 +509,7 @@ func (c *RESTClient) UpdateRepoLabel(ctx context.Context, repo, name, color, des
 
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return err
+		return fmt.Errorf("update label %q in %s: %w", name, repo, err)
 	}
 	defer resp.Body.Close()
 	c.updateRateLimit(resp)
