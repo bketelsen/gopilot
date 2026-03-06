@@ -32,8 +32,17 @@ Displays all currently running agents. Each entry shows:
 - Agent type (Copilot or Claude)
 - Runtime duration
 - Last event received from the agent
+- **Last output** — the most recent line of agent stdout, truncated to 60 characters (full text shown on hover)
 
 This is the primary view for understanding what Gopilot is doing right now.
+
+### Issue Detail
+
+Navigate to any active agent by clicking its issue link on the dashboard. The issue detail page (`/issues/{owner}/{repo}/{id}`) shows:
+
+- Issue metadata (title, labels, priority, attempt number)
+- **Live output panel** — a terminal-style panel that streams agent stdout in real time using SSE. Lines are appended as they arrive, and the panel auto-scrolls to the latest output. On initial load, the last 50 lines from the output buffer are displayed.
+- Session history table showing all previous runs for this issue
 
 ### Completed Runs
 
@@ -115,6 +124,14 @@ Aggregated statistics including:
 The dashboard uses Server-Sent Events (SSE) to push state changes to connected browsers. There is no polling and no manual refresh required. When an agent starts, completes, fails, or emits new events, the dashboard updates automatically.
 
 This is built on top of HTMX, which handles partial page updates seamlessly. When an SSE event arrives, HTMX swaps in the updated HTML fragment without a full page reload. The result is a responsive experience that stays current without user interaction.
+
+### Agent Output Streaming
+
+Agent stdout is captured via `io.Pipe` and scanned line by line. Each line:
+
+- Updates the run entry's `LastMessage` and `LastEventAt` fields (which fixes stall detection — it now resets on real output, not just at launch)
+- Is stored in a 50-line rolling buffer on the `RunEntry` for the issue detail view
+- Is broadcast as an SSE event (`agent-output-{issueID}`) containing the line wrapped in an HTML `<div>`, which the issue detail page appends in real time via HTMX `sse-swap` with `hx-swap="beforeend"`
 
 ## Tech Stack
 

@@ -1,9 +1,12 @@
 package orchestrator
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
+	"html"
+	"io"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -349,13 +352,16 @@ func (o *Orchestrator) dispatch(ctx context.Context, issue domain.Issue, attempt
 		return
 	}
 
+	pr, pw := io.Pipe()
 	opts := agent.AgentOpts{
 		Model:            o.cfg.Agent.Model,
 		MaxContinuations: o.cfg.Agent.MaxAutopilotContinues,
+		Stdout:           pw,
 	}
 	sess, err := runner.Start(ctx, wsPath, rendered, opts)
 	if err != nil {
 		log.Error("agent start failed", "error", err)
+		pw.Close()
 		o.state.Release(issue.ID)
 		return
 	}
@@ -373,6 +379,7 @@ func (o *Orchestrator) dispatch(ctx context.Context, issue domain.Issue, attempt
 		StartedAt:   now,
 		LastEventAt: now,
 		Attempt:     attempt,
+		OutputLines: domain.NewRingBuffer(50),
 	}
 	o.state.AddRunning(issue.ID, entry)
 
@@ -382,11 +389,20 @@ func (o *Orchestrator) dispatch(ctx context.Context, issue domain.Issue, attempt
 		"workspace", wsPath,
 	)
 
-	go o.monitorAgent(issue, sess, entry)
+	go o.monitorAgent(issue, sess, entry, pr, pw)
 }
 
-func (o *Orchestrator) monitorAgent(issue domain.Issue, sess *agent.Session, entry *domain.RunEntry) {
+func (o *Orchestrator) monitorAgent(issue domain.Issue, sess *agent.Session, entry *domain.RunEntry, pr *io.PipeReader, pw *io.PipeWriter) {
+	// Scan agent stdout in a separate goroutine.
+	scanDone := make(chan struct{})
+	go func() {
+		defer close(scanDone)
+		o.scanAgentOutput(issue, entry, pr)
+	}()
+
 	<-sess.Done
+	pw.Close()
+	<-scanDone // wait for scanner to drain
 
 	log := slog.With("issue", issue.Identifier(), "session_id", sess.ID)
 
@@ -462,12 +478,39 @@ func (o *Orchestrator) monitorAgent(issue domain.Issue, sess *agent.Session, ent
 	}
 }
 
+const outputBufferSize = 50
+
+// scanAgentOutput reads agent stdout line by line, updating the RunEntry and
+// broadcasting SSE events. It returns when the reader is closed.
+func (o *Orchestrator) scanAgentOutput(issue domain.Issue, entry *domain.RunEntry, pr *io.PipeReader) {
+	scanner := bufio.NewScanner(pr)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" {
+			continue
+		}
+
+		now := time.Now()
+		entry.UpdateOutput(line, now)
+		if entry.OutputLines != nil {
+			entry.OutputLines.Add(line)
+		}
+
+		if o.sseHub != nil {
+			o.sseHub.Broadcast(
+				fmt.Sprintf("agent-output-%d", issue.ID),
+				fmt.Sprintf(`<div class="py-0.5">%s</div>`, html.EscapeString(line)),
+			)
+		}
+	}
+}
+
 func (o *Orchestrator) detectStalls(ctx context.Context) {
 	timeout := o.cfg.StallTimeout()
 	for _, entry := range o.state.AllRunning() {
 		if entry.IsStalled(timeout) {
 			log := slog.With("issue", entry.Issue.Identifier(), "session_id", entry.SessionID)
-			log.Warn("agent stalled, killing", "last_event", entry.LastEventAt)
+			log.Warn("agent stalled, killing", "last_event", entry.GetLastEventAt())
 
 			o.sessionsMu.Lock()
 			if sess, ok := o.sessions[entry.Issue.ID]; ok {

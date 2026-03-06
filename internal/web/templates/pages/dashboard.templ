@@ -40,12 +40,13 @@ templ DashboardContent(running []*domain.RunEntry, retries []*domain.RetryEntry,
 						<th class="px-4 py-2 text-left">Duration</th>
 						<th class="px-4 py-2 text-left">Attempt</th>
 						<th class="px-4 py-2 text-left">Last Activity</th>
+						<th class="px-4 py-2 text-left">Last Output</th>
 					</tr>
 				</thead>
 				<tbody>
 					if len(running) == 0 {
 						<tr>
-							<td colspan="6" class="px-4 py-8 text-center text-gray-500">No active agents</td>
+							<td colspan="7" class="px-4 py-8 text-center text-gray-500">No active agents</td>
 						</tr>
 					}
 					for _, entry := range running {
@@ -61,7 +62,8 @@ templ DashboardContent(running []*domain.RunEntry, retries []*domain.RetryEntry,
 							</td>
 							<td class="px-4 py-2">{ FormatDuration(entry.Duration()) }</td>
 							<td class="px-4 py-2">{ fmt.Sprintf("%d", entry.Attempt) }</td>
-							<td class="px-4 py-2">{ entry.LastEventAt.Format("15:04:05") }</td>
+							<td class="px-4 py-2">{ entry.GetLastEventAt().Format("15:04:05") }</td>
+							<td class="px-4 py-2 max-w-xs truncate text-gray-600 dark:text-gray-400 font-mono text-xs" title={ entry.GetLastMessage() }>{ TruncateString(entry.GetLastMessage(), 60) }</td>
 						</tr>
 					}
 				</tbody>
@@ -137,4 +139,11 @@ func FormatDuration(d time.Duration) string {
 		return fmt.Sprintf("%dm%ds", m, s)
 	}
 	return fmt.Sprintf("%ds", s)
+}
+
+func TruncateString(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen] + "…"
 }

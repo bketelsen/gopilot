@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -213,6 +214,7 @@ func SortCommentsByTime(comments []Comment) {
 
 // RunEntry tracks an active agent session.
 type RunEntry struct {
+	mu          sync.RWMutex
 	Issue       Issue
 	SessionID   string
 	ProcessPID  int
@@ -223,15 +225,41 @@ type RunEntry struct {
 	TurnCount   int
 	Attempt     int
 	Tokens      TokenCounts
+	OutputLines *RingBuffer // rolling buffer of recent agent output lines
+}
+
+// UpdateOutput atomically updates the output-related fields from the scanner goroutine.
+func (r *RunEntry) UpdateOutput(line string, now time.Time) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.LastEventAt = now
+	r.LastMessage = line
+	r.TurnCount++
+}
+
+// GetLastMessage returns a thread-safe copy of LastMessage.
+func (r *RunEntry) GetLastMessage() string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.LastMessage
+}
+
+// GetLastEventAt returns the last event timestamp in a thread-safe way.
+func (r *RunEntry) GetLastEventAt() time.Time {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.LastEventAt
 }
 
 // Duration returns time since the agent started.
-func (r RunEntry) Duration() time.Duration {
+func (r *RunEntry) Duration() time.Duration {
 	return time.Since(r.StartedAt)
 }
 
 // IsStalled returns true if no events received within the timeout.
-func (r RunEntry) IsStalled(timeout time.Duration) bool {
+func (r *RunEntry) IsStalled(timeout time.Duration) bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	return time.Since(r.LastEventAt) > timeout
 }
 

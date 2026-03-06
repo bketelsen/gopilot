@@ -24,6 +24,29 @@ templ IssueDetail(running *domain.RunEntry, history []domain.CompletedRun, issue
 						<div><span class="text-gray-500">Attempt: </span>{ fmt.Sprintf("%d", running.Attempt) }</div>
 					</div>
 				</div>
+
+				<!-- Live Agent Output -->
+				<div class="bg-white dark:bg-gray-800 rounded-lg shadow">
+					<div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+						<h2 class="text-lg font-semibold">Live Agent Output</h2>
+						<span class="px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 animate-pulse">Live</span>
+					</div>
+					<div
+						id="agent-output"
+						class="p-4 bg-gray-900 text-green-400 font-mono text-xs max-h-96 overflow-y-auto"
+						hx-ext="sse"
+						sse-connect="/api/v1/events"
+						sse-swap={ fmt.Sprintf("agent-output-%d", issueID) }
+						hx-swap="beforeend scroll:bottom"
+					>
+						<!-- Initial output from buffer -->
+						if running.OutputLines != nil {
+							for _, line := range running.OutputLines.Lines() {
+								<div class="py-0.5">{ line }</div>
+							}
+						}
+					</div>
+				</div>
 			} else {
 				<div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
 					<h1 class="text-2xl font-bold">{ fmt.Sprintf("%s#%d", repo, issueID) }</h1>

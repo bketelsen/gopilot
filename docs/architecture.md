@@ -55,9 +55,13 @@ Once an eligible issue is found:
 
 On each poll cycle, the orchestrator checks all running agents against current issue state. Agents whose issues have been closed, reassigned, or had their eligible labels removed are stopped and their workspaces cleaned up.
 
+### Agent Output Capture
+
+When dispatching an agent, the orchestrator creates an `io.Pipe` and passes the write end as `AgentOpts.Stdout`. A background goroutine scans the read end line by line, updating `RunEntry.LastMessage`, `RunEntry.LastEventAt`, and `RunEntry.TurnCount`. Lines are also stored in a 50-line rolling buffer (`RunEntry.OutputLines`) and broadcast as per-issue SSE events for the live dashboard.
+
 ### Stall Detection
 
-The orchestrator monitors agent event output continuously. If an agent has not emitted any events within `stall_timeout_ms`, it is considered stalled and its process is killed. This prevents agents from hanging indefinitely on stuck operations.
+The orchestrator monitors agent event output continuously. If an agent has not emitted any events within `stall_timeout_ms`, it is considered stalled and its process is killed. Because `LastEventAt` is updated on each line of real agent output, stall detection now accurately reflects whether the agent is producing work rather than just measuring wall-clock time from launch.
 
 ### Retry
 

@@ -203,11 +203,16 @@ func (s *Server) handleIssueDetailAPI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_ = owner + "/" + repo
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{
-		"running": s.state.GetRunning(id),
+	running := s.state.GetRunning(id)
+	resp := map[string]any{
+		"running": running,
 		"history": s.state.GetHistory(id),
-	})
+	}
+	if running != nil && running.OutputLines != nil {
+		resp["output_lines"] = running.OutputLines.Lines()
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resp)
 }
 
 func (s *Server) handleSprintPage(w http.ResponseWriter, r *http.Request) {
