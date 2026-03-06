@@ -74,6 +74,7 @@ func (s *Server) buildRouter() chi.Router {
 		r.Get("/state", s.handleState)
 		r.Get("/metrics", s.handleMetrics)
 		r.Get("/events", s.sseHub.HandleSSE)
+		r.Get("/dashboard", s.handleDashboardFragment)
 		r.Get("/issues/{owner}/{repo}/{id}", s.handleIssueDetailAPI)
 		r.Get("/sprint", s.handleSprintAPI)
 		r.Post("/refresh", s.handleRefresh)
@@ -135,6 +136,24 @@ func (s *Server) handleDashboardPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	component := pages.Dashboard(running, retries, planningEntries, m, s.cfg.Polling.MaxConcurrentAgents)
+	component.Render(r.Context(), w)
+}
+
+func (s *Server) handleDashboardFragment(w http.ResponseWriter, r *http.Request) {
+	running := s.state.AllRunning()
+	var retries []*domain.RetryEntry
+	if s.retries != nil {
+		retries = s.retries.All()
+	}
+	var planningEntries []*domain.PlanningEntry
+	if s.planning != nil {
+		planningEntries = s.planning.AllPlanning()
+	}
+	m := map[string]int64{}
+	if s.metrics != nil {
+		m = s.metrics.All()
+	}
+	component := pages.DashboardContent(running, retries, planningEntries, m, s.cfg.Polling.MaxConcurrentAgents)
 	component.Render(r.Context(), w)
 }
 
