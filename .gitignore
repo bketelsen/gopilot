@@ -23,6 +23,9 @@ Thumbs.db
 coverage.out
 .worktrees/
 
+# MkDocs build output
+site/
+
 # Tailwind CSS standalone CLI
 bin/
 gopilot.log
