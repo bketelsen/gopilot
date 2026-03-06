@@ -203,7 +203,10 @@ func writeJSON(ctx context.Context, conn *websocket.Conn, msg WSMessage) {
 func readJSON(ctx context.Context, conn *websocket.Conn, msg *WSMessage) error {
 	_, data, err := conn.Read(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("read websocket message: %w", err)
 	}
-	return json.Unmarshal(data, msg)
+	if err := json.Unmarshal(data, msg); err != nil {
+		return fmt.Errorf("unmarshal websocket message: %w", err)
+	}
+	return nil
 }

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -304,6 +305,92 @@ func TestUpdateRepoLabel(t *testing.T) {
 	}
 	if received["description"] != "Updated description" {
 		t.Errorf("description = %v, want Updated description", received["description"])
+	}
+}
+
+func TestErrorWrapping(t *testing.T) {
+	// Use an unreachable server to trigger HTTP errors
+	cfg := config.GitHubConfig{
+		Token:          "test-token",
+		Repos:          []string{"owner/repo"},
+		EligibleLabels: []string{"gopilot"},
+	}
+	client := NewRESTClient(cfg, "http://127.0.0.1:1/")
+
+	ctx := context.Background()
+
+	tests := []struct {
+		name    string
+		fn      func() error
+		wantCtx string
+	}{
+		{
+			name:    "FetchCandidateIssues wraps fetch error",
+			fn:      func() error { _, err := client.FetchCandidateIssues(ctx); return err },
+			wantCtx: "fetching owner/repo",
+		},
+		{
+			name:    "FetchIssueState wraps error",
+			fn:      func() error { _, err := client.FetchIssueState(ctx, "owner/repo", 1); return err },
+			wantCtx: "fetch issue state owner/repo#1",
+		},
+		{
+			name:    "AddComment wraps error",
+			fn:      func() error { return client.AddComment(ctx, "owner/repo", 1, "hi") },
+			wantCtx: "add comment to owner/repo#1",
+		},
+		{
+			name:    "AddLabel wraps error",
+			fn:      func() error { return client.AddLabel(ctx, "owner/repo", 1, "bug") },
+			wantCtx: "add label \"bug\" to owner/repo#1",
+		},
+		{
+			name:    "FetchIssueComments wraps error",
+			fn:      func() error { _, err := client.FetchIssueComments(ctx, "owner/repo", 1); return err },
+			wantCtx: "fetch comments for owner/repo#1",
+		},
+		{
+			name:    "RemoveLabel wraps error",
+			fn:      func() error { return client.RemoveLabel(ctx, "owner/repo", 1, "bug") },
+			wantCtx: "remove label \"bug\" from owner/repo#1",
+		},
+		{
+			name:    "CreateIssue wraps error",
+			fn:      func() error { _, err := client.CreateIssue(ctx, "owner/repo", "t", "b", nil); return err },
+			wantCtx: "create issue in owner/repo",
+		},
+		{
+			name:    "AddSubIssue wraps error",
+			fn:      func() error { return client.AddSubIssue(ctx, "owner/repo", 1, 2) },
+			wantCtx: "add sub-issue 2 to owner/repo#1",
+		},
+		{
+			name:    "GetRepoLabel wraps error",
+			fn:      func() error { _, err := client.GetRepoLabel(ctx, "owner/repo", "x"); return err },
+			wantCtx: "get label \"x\" from owner/repo",
+		},
+		{
+			name:    "CreateRepoLabel wraps error",
+			fn:      func() error { return client.CreateRepoLabel(ctx, "owner/repo", "x", "fff", "d") },
+			wantCtx: "create label \"x\" in owner/repo",
+		},
+		{
+			name:    "UpdateRepoLabel wraps error",
+			fn:      func() error { return client.UpdateRepoLabel(ctx, "owner/repo", "x", "fff", "d") },
+			wantCtx: "update label \"x\" in owner/repo",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.fn()
+			if err == nil {
+				t.Fatal("expected error, got nil")
+			}
+			if !strings.Contains(err.Error(), tt.wantCtx) {
+				t.Errorf("error = %q, want to contain %q", err.Error(), tt.wantCtx)
+			}
+		})
 	}
 }
 

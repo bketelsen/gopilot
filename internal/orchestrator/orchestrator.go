@@ -74,7 +74,7 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 	)
 
 	if o.configPath != "" {
-		watcher, err := config.Watch(o.configPath, func(newCfg *config.Config, loadErr error) {
+		watcher, err := config.Watch(ctx, o.configPath, func(newCfg *config.Config, loadErr error) {
 			if loadErr != nil {
 				slog.Error("config reload failed, keeping current config", "error", loadErr)
 				return
@@ -146,7 +146,7 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 func (o *Orchestrator) DryRun(ctx context.Context) error {
 	issues, err := o.github.FetchCandidateIssues(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("dry run: fetch candidates: %w", err)
 	}
 	domain.SortByPriority(issues)
 
