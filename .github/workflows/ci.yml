@@ -31,7 +31,10 @@ jobs:
       - name: Run tests
         run: task test
 
-      - name: Lint
+      - name: Install golangci-lint
         uses: golangci/golangci-lint-action@v7
         with:
-          args: ./...
+          install-only: true
+
+      - name: Lint
+        run: task lint
