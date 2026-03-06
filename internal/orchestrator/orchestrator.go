@@ -15,6 +15,7 @@ import (
 	"github.com/bketelsen/gopilot/internal/domain"
 	gh "github.com/bketelsen/gopilot/internal/github"
 	"github.com/bketelsen/gopilot/internal/metrics"
+	"github.com/bketelsen/gopilot/internal/planning"
 	"github.com/bketelsen/gopilot/internal/prompt"
 	"github.com/bketelsen/gopilot/internal/skills"
 	"github.com/bketelsen/gopilot/internal/web"
@@ -103,6 +104,12 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 		o.sseHub = webSrv.SSEHub()
 		webSrv.SetRefreshFunc(func() {
 			go o.Tick(ctx)
+		})
+
+		planningMgr := planning.NewManager()
+		webSrv.SetPlanningManager(planningMgr, o.agents[o.cfg.Agent.Command], planning.HandlerConfig{
+			WorkspaceRoot: o.cfg.Workspace.Root,
+			GitHubClient:  o.github,
 		})
 		go func() {
 			slog.Info("dashboard starting", "addr", o.cfg.Dashboard.Addr)
