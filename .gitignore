@@ -4,6 +4,7 @@
 
 # Workspaces
 /workspaces/
+/test-workspaces/
 
 # Agent session files
 .gopilot-session.md
@@ -29,3 +30,5 @@ site/
 # Tailwind CSS standalone CLI
 bin/
 gopilot.log
+gopilot-local.log
+gopilot-test.yaml

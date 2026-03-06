@@ -294,6 +294,13 @@ func (o *Orchestrator) dispatch(ctx context.Context, issue domain.Issue, attempt
 	if err := o.workspace.RunHook(ctx, "before_run", wsPath, issue); err != nil {
 		log.Error("before_run hook failed", "error", err)
 		o.state.Release(issue.ID)
+		if attempt < o.cfg.Agent.MaxRetries {
+			maxBackoff := time.Duration(o.cfg.Agent.MaxRetryBackoffMS) * time.Millisecond
+			o.retryQueue.Enqueue(issue.ID, issue.Repo, issue.Identifier(), attempt+1, "before_run hook: "+err.Error(), maxBackoff)
+			log.Info("scheduled retry", "next_attempt", attempt+1)
+		} else {
+			o.handleMaxRetriesExceeded(issue, "before_run hook: "+err.Error())
+		}
 		return
 	}
 

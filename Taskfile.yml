@@ -46,6 +46,13 @@ tasks:
     cmds:
       - rm -f gopilot
 
+  # GITHUB_TOKEN=$(gh auth token) ./gopilot --config gopilot.yaml --debug --port 3000 --log gopilot-local.log
+  selfhost:
+    desc: Build and run in self-hosted mode
+    deps: [build]
+    cmds:
+      - GITHUB_TOKEN=$(gh auth token) ./gopilot --config gopilot.yaml --debug --port 3100 --log gopilot-local.log
+
   dev:
     desc: Build and run
     deps: [build]
