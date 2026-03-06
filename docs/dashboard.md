@@ -32,8 +32,17 @@ Displays all currently running agents. Each entry shows:
 - Agent type (Copilot or Claude)
 - Runtime duration
 - Last event received from the agent
+- **Last Output** -- The most recent line of agent stdout, updated in real time
 
 This is the primary view for understanding what Gopilot is doing right now.
+
+### Issue Detail
+
+Each running issue links to an issue detail page (`/issues/{owner}/{repo}/{id}`) that shows:
+
+- Issue metadata (title, labels, priority, attempt)
+- **Live Output panel** -- Streams agent stdout in real time via HTMX + SSE. Pre-populated with the last 50 lines from the output buffer and appended to as the agent produces more output.
+- Session history table with past runs
 
 ### Completed Runs
 

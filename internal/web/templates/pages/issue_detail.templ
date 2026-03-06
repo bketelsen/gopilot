@@ -31,6 +31,27 @@ templ IssueDetail(running *domain.RunEntry, history []domain.CompletedRun, issue
 				</div>
 			}
 
+			if running != nil {
+				<div class="bg-white dark:bg-gray-800 rounded-lg shadow">
+					<div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+						<h2 class="text-lg font-semibold">Live Output</h2>
+					</div>
+					<div
+						class="p-4 font-mono text-xs bg-gray-900 text-green-400 rounded-b-lg max-h-96 overflow-y-auto"
+						hx-ext="sse"
+						sse-connect="/api/v1/events"
+						hx-swap="beforeend"
+						sse-swap={ fmt.Sprintf("agent-output-%d", issueID) }
+					>
+						if running.OutputBuffer != nil {
+							for _, line := range running.OutputBuffer.Lines() {
+								<div>{ line }</div>
+							}
+						}
+					</div>
+				</div>
+			}
+
 			<div class="bg-white dark:bg-gray-800 rounded-lg shadow">
 				<div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
 					<h2 class="text-lg font-semibold">Session History</h2>
