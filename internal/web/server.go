@@ -6,8 +6,10 @@ import (
 	"os/exec"
 	"strconv"
 
+	"github.com/bketelsen/gopilot/internal/agent"
 	"github.com/bketelsen/gopilot/internal/config"
 	"github.com/bketelsen/gopilot/internal/domain"
+	"github.com/bketelsen/gopilot/internal/planning"
 	"github.com/bketelsen/gopilot/internal/web/templates/pages"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -46,6 +48,7 @@ type Server struct {
 	metrics        MetricsProvider
 	retries        RetryProvider
 	planning       PlanningProvider
+	planningMgr    *planning.Manager
 	triggerRefresh func()
 }
 
@@ -259,6 +262,13 @@ func isCommandAvailable(name string) bool {
 // SetRefreshFunc sets the callback invoked by POST /api/v1/refresh.
 func (s *Server) SetRefreshFunc(fn func()) {
 	s.triggerRefresh = fn
+}
+
+// SetPlanningManager configures the planning manager and registers its routes.
+func (s *Server) SetPlanningManager(mgr *planning.Manager, runner agent.Runner, cfg planning.HandlerConfig) {
+	s.planningMgr = mgr
+	routes := planning.NewRoutes(mgr, runner, cfg)
+	routes.Register(s.router)
 }
 
 func (s *Server) handleRefresh(w http.ResponseWriter, r *http.Request) {
