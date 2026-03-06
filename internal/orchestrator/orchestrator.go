@@ -74,7 +74,7 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 	)
 
 	if o.configPath != "" {
-		watcher, err := config.Watch(o.configPath, func(newCfg *config.Config, loadErr error) {
+		watcher, err := config.Watch(ctx, o.configPath, func(newCfg *config.Config, loadErr error) {
 			if loadErr != nil {
 				slog.Error("config reload failed, keeping current config", "error", loadErr)
 				return

@@ -1,6 +1,7 @@
 package config
 
 import (
+	"context"
 	"log/slog"
 
 	"github.com/fsnotify/fsnotify"
@@ -12,7 +13,7 @@ type Watcher struct {
 	fsw *fsnotify.Watcher
 }
 
-func Watch(path string, cb ReloadCallback) (*Watcher, error) {
+func Watch(ctx context.Context, path string, cb ReloadCallback) (*Watcher, error) {
 	fsw, err := fsnotify.NewWatcher()
 	if err != nil {
 		return nil, err
@@ -24,8 +25,11 @@ func Watch(path string, cb ReloadCallback) (*Watcher, error) {
 	}
 
 	go func() {
+		defer fsw.Close()
 		for {
 			select {
+			case <-ctx.Done():
+				return
 			case event, ok := <-fsw.Events:
 				if !ok {
 					return
