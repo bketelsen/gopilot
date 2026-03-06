@@ -72,6 +72,14 @@ func ParsePlan(markdown string) (*Plan, error) {
 	if plan.Title == "" {
 		return nil, fmt.Errorf("no plan title found")
 	}
+	// Remove phases with no tasks (e.g. non-phase ### headings like "Key Design Decisions")
+	filtered := plan.Phases[:0]
+	for _, p := range plan.Phases {
+		if len(p.Tasks) > 0 {
+			filtered = append(filtered, p)
+		}
+	}
+	plan.Phases = filtered
 	return plan, nil
 }
 
