@@ -61,6 +61,15 @@ func (m *mockGitHub) FetchLabeledIssues(ctx context.Context, label string) ([]do
 func (m *mockGitHub) FetchLinkedPullRequests(ctx context.Context, repo string, issueNumber int) ([]domain.PullRequest, error) {
 	return nil, nil
 }
+func (m *mockGitHub) FetchMonitoredPRs(ctx context.Context, label string) ([]domain.PullRequest, error) {
+	return nil, nil
+}
+func (m *mockGitHub) FetchCheckRuns(ctx context.Context, repo string, ref string) ([]domain.CheckRun, error) {
+	return nil, nil
+}
+func (m *mockGitHub) FetchCheckRunLog(ctx context.Context, repo string, checkRunID int64) (string, error) {
+	return "", nil
+}
 
 // mockAgent implements agent.Runner for testing.
 type mockAgent struct {
@@ -345,6 +354,15 @@ func (m *mockGitHubSplit) FetchLabeledIssues(ctx context.Context, label string) 
 func (m *mockGitHubSplit) FetchLinkedPullRequests(ctx context.Context, repo string, issueNumber int) ([]domain.PullRequest, error) {
 	return nil, nil
 }
+func (m *mockGitHubSplit) FetchMonitoredPRs(ctx context.Context, label string) ([]domain.PullRequest, error) {
+	return nil, nil
+}
+func (m *mockGitHubSplit) FetchCheckRuns(ctx context.Context, repo string, ref string) ([]domain.CheckRun, error) {
+	return nil, nil
+}
+func (m *mockGitHubSplit) FetchCheckRunLog(ctx context.Context, repo string, checkRunID int64) (string, error) {
+	return "", nil
+}
 
 func TestRetrySkipsIneligibleIssue(t *testing.T) {
 	cfg := &config.Config{
@@ -454,6 +472,205 @@ func TestBlockedIssueNotDispatched(t *testing.T) {
 	}
 	if orch.state.RunningCount() != 1 {
 		t.Errorf("running = %d, want 1", orch.state.RunningCount())
+	}
+}
+
+// mockGitHubPR extends mockGitHub with PR monitoring support.
+type mockGitHubPR struct {
+	mockGitHub
+	prs       []domain.PullRequest
+	checkRuns map[string][]domain.CheckRun // ref -> check runs
+	checkLogs map[int64]string             // check run ID -> log
+	comments  []string
+	labels    []string
+}
+
+func (m *mockGitHubPR) FetchMonitoredPRs(ctx context.Context, label string) ([]domain.PullRequest, error) {
+	return m.prs, nil
+}
+func (m *mockGitHubPR) FetchCheckRuns(ctx context.Context, repo string, ref string) ([]domain.CheckRun, error) {
+	if runs, ok := m.checkRuns[ref]; ok {
+		return runs, nil
+	}
+	return nil, nil
+}
+func (m *mockGitHubPR) FetchCheckRunLog(ctx context.Context, repo string, checkRunID int64) (string, error) {
+	if log, ok := m.checkLogs[checkRunID]; ok {
+		return log, nil
+	}
+	return "", nil
+}
+func (m *mockGitHubPR) AddComment(ctx context.Context, repo string, id int, body string) error {
+	m.comments = append(m.comments, body)
+	return nil
+}
+func (m *mockGitHubPR) AddLabel(ctx context.Context, repo string, id int, label string) error {
+	m.labels = append(m.labels, label)
+	return nil
+}
+
+func TestMonitorPRsDisabledByDefault(t *testing.T) {
+	cfg := &config.Config{
+		GitHub: config.GitHubConfig{
+			Token: "tok", Repos: []string{"o/r"}, EligibleLabels: []string{"gopilot"},
+		},
+		Polling: config.PollingConfig{IntervalMS: 1000, MaxConcurrentAgents: 3},
+		Agent: config.AgentConfig{
+			Command: "mock", TurnTimeoutMS: 60000, StallTimeoutMS: 60000,
+			MaxRetries: 3, MaxRetryBackoffMS: 1000, MaxAutopilotContinues: 5,
+		},
+		Workspace: config.WorkspaceConfig{Root: t.TempDir(), HookTimeoutMS: 5000},
+		Prompt:    "Work",
+		// PRMonitoring.Enabled defaults to false
+	}
+
+	gh := &mockGitHubPR{
+		prs: []domain.PullRequest{
+			{Number: 1, Repo: "o/r", HeadSHA: "abc123", State: "open"},
+		},
+	}
+	ag := &mockAgent{}
+	orch := NewOrchestrator(cfg, gh, map[string]agent.Runner{"mock": ag})
+
+	ctx := context.Background()
+	orch.monitorPRs(ctx)
+
+	// Should not queue any fixes since PR monitoring is disabled
+	if len(orch.state.AllPRFixes()) != 0 {
+		t.Error("expected no PR fixes when monitoring is disabled")
+	}
+}
+
+func TestMonitorPRsQueuesFix(t *testing.T) {
+	cfg := &config.Config{
+		GitHub: config.GitHubConfig{
+			Token: "tok", Repos: []string{"o/r"}, EligibleLabels: []string{"gopilot"},
+		},
+		Polling: config.PollingConfig{IntervalMS: 1000, MaxConcurrentAgents: 3},
+		Agent: config.AgentConfig{
+			Command: "mock", TurnTimeoutMS: 60000, StallTimeoutMS: 60000,
+			MaxRetries: 3, MaxRetryBackoffMS: 1000, MaxAutopilotContinues: 5,
+		},
+		Workspace: config.WorkspaceConfig{Root: t.TempDir(), HookTimeoutMS: 5000},
+		Prompt:    "Work",
+		PRMonitoring: config.PRMonitoringConfig{
+			Enabled:        true,
+			PollIntervalMS: 1, // immediate
+			Label:          "gopilot",
+			MaxFixAttempts: 2,
+			LogTruncateLen: 2000,
+		},
+	}
+
+	gh := &mockGitHubPR{
+		prs: []domain.PullRequest{
+			{Number: 22, Repo: "o/r", HeadRef: "gopilot/issue-11", HeadSHA: "abc123", State: "open", Title: "feat: lint"},
+		},
+		checkRuns: map[string][]domain.CheckRun{
+			"abc123": {
+				{ID: 1, Name: "test", Status: "completed", Conclusion: "success"},
+				{ID: 2, Name: "lint", Status: "completed", Conclusion: "failure", DetailsURL: "https://example.com"},
+			},
+		},
+		checkLogs: map[int64]string{
+			2: "golangci-lint: command not found",
+		},
+	}
+	ag := &mockAgent{}
+	orch := NewOrchestrator(cfg, gh, map[string]agent.Runner{"mock": ag})
+
+	ctx := context.Background()
+	orch.monitorPRs(ctx)
+
+	// The PR fix should have been dispatched (queued and then dispatched in the same call)
+	// Check that the agent was started
+	if ag.started != 1 {
+		t.Errorf("agent started = %d, want 1", ag.started)
+	}
+}
+
+func TestMonitorPRsSkipsPassingChecks(t *testing.T) {
+	cfg := &config.Config{
+		GitHub: config.GitHubConfig{
+			Token: "tok", Repos: []string{"o/r"}, EligibleLabels: []string{"gopilot"},
+		},
+		Polling: config.PollingConfig{IntervalMS: 1000, MaxConcurrentAgents: 3},
+		Agent: config.AgentConfig{
+			Command: "mock", TurnTimeoutMS: 60000, StallTimeoutMS: 60000,
+			MaxRetries: 3, MaxRetryBackoffMS: 1000, MaxAutopilotContinues: 5,
+		},
+		Workspace: config.WorkspaceConfig{Root: t.TempDir(), HookTimeoutMS: 5000},
+		Prompt:    "Work",
+		PRMonitoring: config.PRMonitoringConfig{
+			Enabled:        true,
+			PollIntervalMS: 1,
+			Label:          "gopilot",
+			MaxFixAttempts: 2,
+			LogTruncateLen: 2000,
+		},
+	}
+
+	gh := &mockGitHubPR{
+		prs: []domain.PullRequest{
+			{Number: 10, Repo: "o/r", HeadSHA: "def456", State: "open"},
+		},
+		checkRuns: map[string][]domain.CheckRun{
+			"def456": {
+				{ID: 1, Name: "test", Status: "completed", Conclusion: "success"},
+				{ID: 2, Name: "lint", Status: "completed", Conclusion: "success"},
+			},
+		},
+	}
+	ag := &mockAgent{}
+	orch := NewOrchestrator(cfg, gh, map[string]agent.Runner{"mock": ag})
+
+	ctx := context.Background()
+	orch.monitorPRs(ctx)
+
+	if ag.started != 0 {
+		t.Errorf("agent started = %d, want 0 (all checks passing)", ag.started)
+	}
+}
+
+func TestMonitorPRsSkipsInProgressChecks(t *testing.T) {
+	cfg := &config.Config{
+		GitHub: config.GitHubConfig{
+			Token: "tok", Repos: []string{"o/r"}, EligibleLabels: []string{"gopilot"},
+		},
+		Polling: config.PollingConfig{IntervalMS: 1000, MaxConcurrentAgents: 3},
+		Agent: config.AgentConfig{
+			Command: "mock", TurnTimeoutMS: 60000, StallTimeoutMS: 60000,
+			MaxRetries: 3, MaxRetryBackoffMS: 1000, MaxAutopilotContinues: 5,
+		},
+		Workspace: config.WorkspaceConfig{Root: t.TempDir(), HookTimeoutMS: 5000},
+		Prompt:    "Work",
+		PRMonitoring: config.PRMonitoringConfig{
+			Enabled:        true,
+			PollIntervalMS: 1,
+			Label:          "gopilot",
+			MaxFixAttempts: 2,
+			LogTruncateLen: 2000,
+		},
+	}
+
+	gh := &mockGitHubPR{
+		prs: []domain.PullRequest{
+			{Number: 10, Repo: "o/r", HeadSHA: "ghi789", State: "open"},
+		},
+		checkRuns: map[string][]domain.CheckRun{
+			"ghi789": {
+				{ID: 1, Name: "test", Status: "in_progress"},
+			},
+		},
+	}
+	ag := &mockAgent{}
+	orch := NewOrchestrator(cfg, gh, map[string]agent.Runner{"mock": ag})
+
+	ctx := context.Background()
+	orch.monitorPRs(ctx)
+
+	if ag.started != 0 {
+		t.Errorf("agent started = %d, want 0 (checks still in progress)", ag.started)
 	}
 }
 

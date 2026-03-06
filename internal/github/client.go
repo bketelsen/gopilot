@@ -21,4 +21,9 @@ type Client interface {
 	AddSubIssue(ctx context.Context, repo string, parentID, childID int) error
 	FetchLabeledIssues(ctx context.Context, label string) ([]domain.Issue, error)
 	FetchLinkedPullRequests(ctx context.Context, repo string, issueNumber int) ([]domain.PullRequest, error)
+
+	// PR monitoring methods
+	FetchMonitoredPRs(ctx context.Context, label string) ([]domain.PullRequest, error)
+	FetchCheckRuns(ctx context.Context, repo string, ref string) ([]domain.CheckRun, error)
+	FetchCheckRunLog(ctx context.Context, repo string, checkRunID int64) (string, error)
 }

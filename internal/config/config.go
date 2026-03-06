@@ -7,14 +7,15 @@ import (
 
 // Config is the top-level gopilot configuration loaded from gopilot.yaml.
 type Config struct {
-	GitHub    GitHubConfig    `yaml:"github"`
-	Polling   PollingConfig   `yaml:"polling"`
-	Workspace WorkspaceConfig `yaml:"workspace"`
-	Agent     AgentConfig     `yaml:"agent"`
-	Skills    SkillsConfig    `yaml:"skills"`
-	Dashboard DashboardConfig `yaml:"dashboard"`
-	Planning  PlanningConfig  `yaml:"planning"`
-	Prompt    string          `yaml:"prompt"`
+	GitHub       GitHubConfig       `yaml:"github"`
+	Polling      PollingConfig      `yaml:"polling"`
+	Workspace    WorkspaceConfig    `yaml:"workspace"`
+	Agent        AgentConfig        `yaml:"agent"`
+	Skills       SkillsConfig       `yaml:"skills"`
+	Dashboard    DashboardConfig    `yaml:"dashboard"`
+	Planning     PlanningConfig     `yaml:"planning"`
+	PRMonitoring PRMonitoringConfig `yaml:"pr_monitoring"`
+	Prompt       string             `yaml:"prompt"`
 }
 
 // GitHubConfig holds GitHub authentication, repository list, and label filters.
@@ -96,6 +97,20 @@ type PlanningConfig struct {
 	Model          string `yaml:"model"`
 }
 
+// PRMonitoringConfig controls PR check monitoring and auto-fix dispatch.
+type PRMonitoringConfig struct {
+	Enabled        bool   `yaml:"enabled"`
+	PollIntervalMS int    `yaml:"poll_interval_ms"`
+	Label          string `yaml:"label"`
+	MaxFixAttempts int    `yaml:"max_fix_attempts"`
+	LogTruncateLen int    `yaml:"log_truncate_len"`
+}
+
+// PollInterval returns the PR monitoring poll interval as a time.Duration.
+func (c *PRMonitoringConfig) PollInterval() time.Duration {
+	return time.Duration(c.PollIntervalMS) * time.Millisecond
+}
+
 // ApplyDefaults fills in zero-valued fields with sensible defaults.
 func (c *Config) ApplyDefaults() {
 	if c.Polling.IntervalMS == 0 {
@@ -136,6 +151,18 @@ func (c *Config) ApplyDefaults() {
 	}
 	if c.Planning.MaxQuestions == 0 {
 		c.Planning.MaxQuestions = 10
+	}
+	if c.PRMonitoring.Label == "" {
+		c.PRMonitoring.Label = "gopilot"
+	}
+	if c.PRMonitoring.PollIntervalMS == 0 {
+		c.PRMonitoring.PollIntervalMS = 300000 // 5 minutes
+	}
+	if c.PRMonitoring.MaxFixAttempts == 0 {
+		c.PRMonitoring.MaxFixAttempts = 2
+	}
+	if c.PRMonitoring.LogTruncateLen == 0 {
+		c.PRMonitoring.LogTruncateLen = 2000
 	}
 }
 
