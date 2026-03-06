@@ -8,6 +8,7 @@ import (
 	"strings"
 )
 
+// Skill represents a loaded SKILL.md definition.
 type Skill struct {
 	Name        string
 	Description string
@@ -16,10 +17,12 @@ type Skill struct {
 	Dir         string
 }
 
+// LoadFromDir loads all SKILL.md files from a single directory tree.
 func LoadFromDir(dir string) ([]*Skill, error) {
 	return LoadFromDirs([]string{dir})
 }
 
+// LoadFromDirs loads SKILL.md files from multiple directory trees.
 func LoadFromDirs(dirs []string) ([]*Skill, error) {
 	byName := make(map[string]*Skill)
 

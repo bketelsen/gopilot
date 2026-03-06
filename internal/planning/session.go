@@ -5,6 +5,7 @@ import (
 	"time"
 )
 
+// Status represents the lifecycle state of a planning session.
 type Status string
 
 const (
@@ -14,12 +15,14 @@ const (
 	StatusFailed  Status = "failed"
 )
 
+// ChatMessage is a single message in a planning conversation.
 type ChatMessage struct {
 	Role      string    `json:"role"` // "user" or "agent"
 	Content   string    `json:"content"`
 	Timestamp time.Time `json:"timestamp"`
 }
 
+// Session holds the state and message history of a planning session.
 type Session struct {
 	ID          string        `json:"id"`
 	Repo        string        `json:"repo"`
@@ -31,6 +34,7 @@ type Session struct {
 	mu sync.Mutex // protects Messages and Status
 }
 
+// AddMessage appends a message to the session's conversation history.
 func (s *Session) AddMessage(role, content string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -41,6 +45,7 @@ func (s *Session) AddMessage(role, content string) {
 	})
 }
 
+// SetStatus updates the session's lifecycle status.
 func (s *Session) SetStatus(status Status) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

@@ -7,17 +7,20 @@ import (
 	"time"
 )
 
+// Manager coordinates interactive planning sessions.
 type Manager struct {
 	mu       sync.RWMutex
 	sessions map[string]*Session
 }
 
+// NewManager creates a Manager with no active sessions.
 func NewManager() *Manager {
 	return &Manager{
 		sessions: make(map[string]*Session),
 	}
 }
 
+// Create starts a new planning session for the given repo.
 func (m *Manager) Create(repo string, linkedIssue *int) (*Session, error) {
 	id := generateID()
 	sess := &Session{
@@ -33,12 +36,14 @@ func (m *Manager) Create(repo string, linkedIssue *int) (*Session, error) {
 	return sess, nil
 }
 
+// Get returns the session with the given ID, or nil.
 func (m *Manager) Get(id string) *Session {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.sessions[id]
 }
 
+// List returns all planning sessions.
 func (m *Manager) List() []*Session {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -49,6 +54,7 @@ func (m *Manager) List() []*Session {
 	return result
 }
 
+// Close marks the session as done.
 func (m *Manager) Close(id string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()

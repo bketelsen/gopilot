@@ -10,6 +10,8 @@ import (
 
 const baseDelay = 10 * time.Second
 
+// BackoffDelay calculates an exponential backoff duration for the given attempt,
+// capped at maxBackoff.
 func BackoffDelay(attempt int, maxBackoff time.Duration) time.Duration {
 	delay := baseDelay * time.Duration(math.Pow(2, float64(attempt)))
 	if delay > maxBackoff {
@@ -18,17 +20,20 @@ func BackoffDelay(attempt int, maxBackoff time.Duration) time.Duration {
 	return delay
 }
 
+// RetryQueue is a thread-safe queue of issues waiting for retry with exponential backoff.
 type RetryQueue struct {
 	mu      sync.Mutex
 	entries map[int]*domain.RetryEntry
 }
 
+// NewRetryQueue creates an empty retry queue.
 func NewRetryQueue() *RetryQueue {
 	return &RetryQueue{
 		entries: make(map[int]*domain.RetryEntry),
 	}
 }
 
+// Enqueue adds an issue to the retry queue with a backoff delay based on the attempt number.
 func (q *RetryQueue) Enqueue(issueID int, repo string, identifier string, attempt int, errMsg string, maxBackoff time.Duration) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
@@ -44,6 +49,7 @@ func (q *RetryQueue) Enqueue(issueID int, repo string, identifier string, attemp
 	}
 }
 
+// DueEntries removes and returns all entries whose backoff period has elapsed.
 func (q *RetryQueue) DueEntries() []*domain.RetryEntry {
 	q.mu.Lock()
 	defer q.mu.Unlock()
@@ -59,12 +65,14 @@ func (q *RetryQueue) DueEntries() []*domain.RetryEntry {
 	return due
 }
 
+// Remove deletes an issue from the retry queue.
 func (q *RetryQueue) Remove(issueID int) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	delete(q.entries, issueID)
 }
 
+// Has reports whether the given issue is in the retry queue.
 func (q *RetryQueue) Has(issueID int) bool {
 	q.mu.Lock()
 	defer q.mu.Unlock()
@@ -72,6 +80,7 @@ func (q *RetryQueue) Has(issueID int) bool {
 	return ok
 }
 
+// All returns a snapshot of all entries in the retry queue.
 func (q *RetryQueue) All() []*domain.RetryEntry {
 	q.mu.Lock()
 	defer q.mu.Unlock()
@@ -82,6 +91,7 @@ func (q *RetryQueue) All() []*domain.RetryEntry {
 	return entries
 }
 
+// Len returns the number of entries in the retry queue.
 func (q *RetryQueue) Len() int {
 	q.mu.Lock()
 	defer q.mu.Unlock()

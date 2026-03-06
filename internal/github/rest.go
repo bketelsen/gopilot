@@ -74,6 +74,7 @@ func (c *RESTClient) updateRateLimit(resp *http.Response) {
 	}
 }
 
+// FetchCandidateIssues returns eligible open issues across all configured repos.
 func (c *RESTClient) FetchCandidateIssues(ctx context.Context) ([]domain.Issue, error) {
 	var all []domain.Issue
 	for _, repo := range c.cfg.Repos {
@@ -128,6 +129,7 @@ func (c *RESTClient) fetchRepoIssues(ctx context.Context, repo string) ([]domain
 	return issues, nil
 }
 
+// FetchIssueState retrieves the current state of a single issue.
 func (c *RESTClient) FetchIssueState(ctx context.Context, repo string, id int) (*domain.Issue, error) {
 	parts := strings.SplitN(repo, "/", 2)
 	if len(parts) != 2 {
@@ -161,6 +163,7 @@ func (c *RESTClient) FetchIssueState(ctx context.Context, repo string, id int) (
 	return &issue, nil
 }
 
+// AddComment posts a comment on a GitHub issue.
 func (c *RESTClient) AddComment(ctx context.Context, repo string, id int, body string) error {
 	parts := strings.SplitN(repo, "/", 2)
 	if len(parts) != 2 {
@@ -191,6 +194,7 @@ func (c *RESTClient) AddComment(ctx context.Context, repo string, id int, body s
 	return nil
 }
 
+// AddLabel adds a label to a GitHub issue.
 func (c *RESTClient) AddLabel(ctx context.Context, repo string, id int, label string) error {
 	parts := strings.SplitN(repo, "/", 2)
 	if len(parts) != 2 {
