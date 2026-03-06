@@ -5,6 +5,7 @@ import (
 	"strings"
 )
 
+// InjectSkills renders the required and optional skills into a prompt fragment.
 func InjectSkills(allSkills []*Skill, required []string, optional []string) string {
 	byName := make(map[string]*Skill)
 	for _, s := range allSkills {

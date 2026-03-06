@@ -17,8 +17,10 @@ type ClaudeRunner struct {
 	Token   string
 }
 
+// Name returns "claude".
 func (r *ClaudeRunner) Name() string { return "claude" }
 
+// Start launches a Claude Code subprocess in the given workspace.
 func (r *ClaudeRunner) Start(ctx context.Context, workspace string, prompt string, opts AgentOpts) (*Session, error) {
 	promptPath := filepath.Join(workspace, ".gopilot-prompt.md")
 	if err := os.WriteFile(promptPath, []byte(prompt), 0644); err != nil {
@@ -69,6 +71,7 @@ func (r *ClaudeRunner) Start(ctx context.Context, workspace string, prompt strin
 	return sess, nil
 }
 
+// Stop terminates a running Claude session with SIGTERM, then SIGKILL.
 func (r *ClaudeRunner) Stop(sess *Session) error {
 	if sess.Cancel != nil {
 		sess.Cancel()

@@ -17,10 +17,12 @@ type CopilotRunner struct {
 	Token   string
 }
 
+// Name returns "copilot".
 func (r *CopilotRunner) Name() string {
 	return "copilot"
 }
 
+// Start launches a GitHub Copilot CLI subprocess in the given workspace.
 func (r *CopilotRunner) Start(ctx context.Context, workspace string, prompt string, opts AgentOpts) (*Session, error) {
 	args := r.buildArgs(prompt, workspace, opts)
 
@@ -69,6 +71,7 @@ func (r *CopilotRunner) Start(ctx context.Context, workspace string, prompt stri
 	return sess, nil
 }
 
+// Stop terminates a running Copilot session with SIGTERM, then SIGKILL.
 func (r *CopilotRunner) Stop(sess *Session) error {
 	if sess.Cancel != nil {
 		sess.Cancel()

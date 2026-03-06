@@ -6,12 +6,15 @@ import (
 	"github.com/fsnotify/fsnotify"
 )
 
+// ReloadCallback is the function signature for config reload notifications.
 type ReloadCallback func(cfg *Config, err error)
 
+// Watcher monitors a configuration file for changes and triggers reloads.
 type Watcher struct {
 	fsw *fsnotify.Watcher
 }
 
+// Watch starts watching the config file at path and calls cb on each change.
 func Watch(path string, cb ReloadCallback) (*Watcher, error) {
 	fsw, err := fsnotify.NewWatcher()
 	if err != nil {
@@ -47,6 +50,7 @@ func Watch(path string, cb ReloadCallback) (*Watcher, error) {
 	return &Watcher{fsw: fsw}, nil
 }
 
+// Close stops watching the configuration file.
 func (w *Watcher) Close() error {
 	return w.fsw.Close()
 }

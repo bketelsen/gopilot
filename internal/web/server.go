@@ -40,6 +40,7 @@ type PlanningProvider interface {
 	PlanningCount() int
 }
 
+// Server is the web dashboard HTTP server.
 type Server struct {
 	router         chi.Router
 	state          StateProvider
@@ -52,6 +53,7 @@ type Server struct {
 	triggerRefresh func()
 }
 
+// NewServer creates a dashboard server wired to the given providers.
 func NewServer(state StateProvider, cfg *config.Config, metrics MetricsProvider, retries RetryProvider, planning ...PlanningProvider) *Server {
 	s := &Server{
 		state:   state,
@@ -94,10 +96,12 @@ func (s *Server) buildRouter() chi.Router {
 	return r
 }
 
+// ServeHTTP implements http.Handler.
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.router.ServeHTTP(w, r)
 }
 
+// SSEHub returns the server's SSE event hub.
 func (s *Server) SSEHub() *SSEHub {
 	return s.sseHub
 }
