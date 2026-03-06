@@ -25,7 +25,7 @@ func (r *ClaudeRunner) Start(ctx context.Context, workspace string, prompt strin
 		return nil, fmt.Errorf("writing prompt file: %w", err)
 	}
 
-	args := r.buildArgs(promptPath)
+	args := r.buildArgs(promptPath, opts)
 	procCtx, cancel := context.WithCancel(ctx)
 	cmd := exec.CommandContext(procCtx, r.Command, args...)
 	cmd.Dir = workspace
@@ -91,11 +91,16 @@ func (r *ClaudeRunner) Stop(sess *Session) error {
 	}
 }
 
-func (r *ClaudeRunner) buildArgs(promptPath string) []string {
-	return []string{
-		"--dangerously-skip-permissions",
+func (r *ClaudeRunner) buildArgs(promptPath string, opts AgentOpts) []string {
+	args := []string{
 		"--print", promptPath,
 	}
+	if opts.ReadOnly {
+		args = append(args, "--permission-mode", "plan")
+	} else {
+		args = append(args, "--dangerously-skip-permissions")
+	}
+	return args
 }
 
 var _ Runner = (*ClaudeRunner)(nil)

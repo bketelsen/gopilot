@@ -19,7 +19,7 @@ import (
 // WSMessage is the JSON message format for WebSocket communication.
 type WSMessage struct {
 	Type    string `json:"type"`              // message, agent, status, error, cancel
-	Content string `json:"content,omitempty"`
+	Content string `json:"content"`
 	Status  string `json:"status,omitempty"`
 }
 
@@ -98,16 +98,22 @@ func (h *Handler) runAgentTurn(ctx context.Context, conn *websocket.Conn, sess *
 	pr, pw := io.Pipe()
 
 	opts := agent.AgentOpts{
-		Stdout: pw,
+		Stdout:   pw,
+		ReadOnly: true,
 	}
+
+	slog.Info("starting planning agent", "session", sess.ID, "workspace", wsDir)
 
 	agentSess, err := h.runner.Start(ctx, wsDir, prompt, opts)
 	if err != nil {
+		slog.Error("planning agent start failed", "session", sess.ID, "error", err)
 		writeJSON(ctx, conn, WSMessage{Type: "error", Content: fmt.Sprintf("agent start failed: %v", err)})
 		sess.SetStatus(StatusFailed)
 		pw.Close()
 		return
 	}
+
+	slog.Info("planning agent started", "session", sess.ID, "pid", agentSess.PID)
 
 	var fullResponse strings.Builder
 	done := make(chan struct{})
@@ -118,6 +124,9 @@ func (h *Handler) runAgentTurn(ctx context.Context, conn *websocket.Conn, sess *
 			line := scanner.Text()
 			fullResponse.WriteString(line)
 			fullResponse.WriteString("\n")
+			if strings.TrimSpace(line) == "" {
+				continue
+			}
 			writeJSON(ctx, conn, WSMessage{Type: "agent", Content: line})
 		}
 	}()
@@ -125,6 +134,13 @@ func (h *Handler) runAgentTurn(ctx context.Context, conn *websocket.Conn, sess *
 	<-agentSess.Done
 	pw.Close()
 	<-done // wait for scanner to finish
+
+	if agentSess.ExitErr != nil {
+		slog.Error("planning agent exited with error", "session", sess.ID, "error", agentSess.ExitErr, "exit_code", agentSess.ExitCode)
+		writeJSON(ctx, conn, WSMessage{Type: "error", Content: fmt.Sprintf("agent exited with error (code %d): %v", agentSess.ExitCode, agentSess.ExitErr)})
+	} else {
+		slog.Info("planning agent completed", "session", sess.ID)
+	}
 
 	response := strings.TrimSpace(fullResponse.String())
 	if response != "" {
@@ -159,8 +175,16 @@ func (h *Handler) buildPrompt(sess *Session) string {
 	}
 
 	b.WriteString("## Instructions\n\n")
-	b.WriteString("Respond naturally. When you have enough context, propose a structured plan:\n\n")
-	b.WriteString("```\n## Plan: <title>\n### Phase 1: <name>\n- [ ] Task (complexity: S/M/L)\n  Dependencies: none\n```\n\n")
+	b.WriteString("You are a PLANNING assistant ONLY. You must NEVER execute, implement, or modify any code.\n")
+	b.WriteString("Your job is to:\n")
+	b.WriteString("1. Explore the codebase to understand the current state\n")
+	b.WriteString("2. Ask clarifying questions if needed\n")
+	b.WriteString("3. Propose a structured plan for the user to review\n\n")
+	b.WriteString("DO NOT create, edit, or delete any files. DO NOT run any commands that modify state.\n")
+	b.WriteString("You may read files and search code to inform your plan.\n\n")
+	b.WriteString("When you have enough context, propose a structured plan using this exact format:\n\n")
+	b.WriteString("```\n## Plan: <title>\n### Phase 1: <name>\n- [ ] Task description (complexity: S/M/L)\n  Dependencies: none\n```\n\n")
+	b.WriteString("After presenting the plan, STOP and wait for user feedback. Do not proceed to implement it.\n\n")
 
 	if h.cfg.SkillText != "" {
 		b.WriteString("## Planning Skill\n\n")

@@ -197,6 +197,31 @@ func TestProcessPlanningIssuesDefaultAddr(t *testing.T) {
 	}
 }
 
+func TestProcessPlanningIssuesExternalURL(t *testing.T) {
+	cfg := newTestConfig(t)
+	cfg.Dashboard.ExternalURL = "https://gopilot.example.com:3000"
+
+	planningIssue := domain.Issue{
+		ID: 7, Repo: "o/r", Title: "Plan: external",
+		Labels: []string{"gopilot", "gopilot:plan"}, Status: "Todo",
+		CreatedAt: time.Now(),
+	}
+
+	gh := &commentCapturingGitHub{
+		mockGitHub: mockGitHub{issues: []domain.Issue{planningIssue}},
+	}
+	orch := NewOrchestrator(cfg, gh, map[string]agent.Runner{"mock": &mockAgent{}})
+
+	orch.processPlanningIssues(context.Background(), []domain.Issue{planningIssue})
+
+	if len(gh.addedComments) != 1 {
+		t.Fatalf("addedComments = %d, want 1", len(gh.addedComments))
+	}
+	if !strings.Contains(gh.addedComments[0].Body, "https://gopilot.example.com:3000/planning/new") {
+		t.Errorf("expected external URL in comment body: %s", gh.addedComments[0].Body)
+	}
+}
+
 func TestOrchestratorPartitionsPlanningIssues(t *testing.T) {
 	cfg := newTestConfig(t)
 	cfg.Planning.Agent = "mock"

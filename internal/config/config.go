@@ -71,8 +71,9 @@ type SkillsConfig struct {
 }
 
 type DashboardConfig struct {
-	Enabled bool   `yaml:"enabled"`
-	Addr    string `yaml:"addr"`
+	Enabled     bool   `yaml:"enabled"`
+	Addr        string `yaml:"addr"`
+	ExternalURL string `yaml:"external_url"`
 }
 
 type PlanningConfig struct {

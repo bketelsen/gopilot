@@ -49,15 +49,19 @@ func (o *Orchestrator) processPlanningIssues(ctx context.Context, issues []domai
 			continue
 		}
 
-		addr := o.cfg.Dashboard.Addr
-		if addr == "" {
-			addr = ":3000"
+		baseURL := o.cfg.Dashboard.ExternalURL
+		if baseURL == "" {
+			addr := o.cfg.Dashboard.Addr
+			if addr == "" {
+				addr = ":3000"
+			}
+			baseURL = fmt.Sprintf("http://localhost%s", addr)
 		}
 		body := fmt.Sprintf(
 			"Planning sessions are now interactive in the dashboard.\n\n"+
-				"Start one at: http://localhost%s/planning/new?repo=%s&issue=%d\n\n"+
+				"Start one at: %s/planning/new?repo=%s&issue=%d\n\n"+
 				"%s",
-			addr, issue.Repo, issue.ID, PlanningCommentMarker,
+			baseURL, issue.Repo, issue.ID, PlanningCommentMarker,
 		)
 		if err := o.github.AddComment(ctx, issue.Repo, issue.ID, body); err != nil {
 			slog.Error("failed to post planning redirect", "issue", issue.Identifier(), "error", err)

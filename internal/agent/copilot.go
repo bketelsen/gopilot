@@ -99,11 +99,15 @@ func (r *CopilotRunner) buildArgs(prompt string, workspace string, opts AgentOpt
 	sharePath := ".gopilot-session.md"
 	args := []string{
 		"-p", prompt,
-		"--allow-all",
 		"--no-ask-user",
 		"--autopilot",
 		"--share", sharePath,
 		"-s",
+	}
+	if opts.ReadOnly {
+		args = append(args, "--allow-all", "--deny-tool", "write", "--deny-tool", "shell")
+	} else {
+		args = append(args, "--allow-all")
 	}
 	if opts.MaxContinuations > 0 {
 		args = append(args, "--max-autopilot-continues", strconv.Itoa(opts.MaxContinuations))

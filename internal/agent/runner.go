@@ -21,6 +21,7 @@ type AgentOpts struct {
 	MaxContinuations int
 	Env              []string
 	Stdout           io.Writer
+	ReadOnly         bool // restrict agent to read-only operations (no file writes, no shell commands)
 }
 
 // Runner launches and manages agent subprocesses.

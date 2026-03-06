@@ -7,7 +7,7 @@ import (
 
 func TestClaudeBuildArgs(t *testing.T) {
 	runner := &ClaudeRunner{Command: "claude"}
-	args := runner.buildArgs("/tmp/ws/.gopilot-prompt.md")
+	args := runner.buildArgs("/tmp/ws/.gopilot-prompt.md", AgentOpts{})
 
 	joined := strings.Join(args, " ")
 	if !strings.Contains(joined, "--dangerously-skip-permissions") {
@@ -18,6 +18,19 @@ func TestClaudeBuildArgs(t *testing.T) {
 	}
 	if !strings.Contains(joined, ".gopilot-prompt.md") {
 		t.Error("missing prompt file path")
+	}
+}
+
+func TestClaudeBuildArgsReadOnly(t *testing.T) {
+	runner := &ClaudeRunner{Command: "claude"}
+	args := runner.buildArgs("/tmp/ws/.gopilot-prompt.md", AgentOpts{ReadOnly: true})
+
+	joined := strings.Join(args, " ")
+	if strings.Contains(joined, "--dangerously-skip-permissions") {
+		t.Error("read-only should not have --dangerously-skip-permissions")
+	}
+	if !strings.Contains(joined, "--permission-mode") {
+		t.Error("read-only should have --permission-mode")
 	}
 }
 
