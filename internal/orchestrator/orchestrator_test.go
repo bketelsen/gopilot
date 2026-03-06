@@ -3,6 +3,8 @@ package orchestrator
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -819,6 +821,86 @@ func TestMonitorPRsSkipsInProgressChecks(t *testing.T) {
 
 	if ag.started != 0 {
 		t.Errorf("agent started = %d, want 0 (checks still in progress)", ag.started)
+	}
+}
+
+type hookCall struct {
+	hook  string
+	issue domain.Issue
+}
+
+type mockWorkspace struct {
+	hookCalls []hookCall
+	root      string
+}
+
+func (m *mockWorkspace) Ensure(ctx context.Context, issue domain.Issue) (string, error) {
+	path := filepath.Join(m.root, fmt.Sprintf("issue-%d", issue.ID))
+	os.MkdirAll(path, 0755)
+	return path, nil
+}
+
+func (m *mockWorkspace) RunHook(ctx context.Context, hook string, workspacePath string, issue domain.Issue) error {
+	m.hookCalls = append(m.hookCalls, hookCall{hook: hook, issue: issue})
+	return nil
+}
+
+func (m *mockWorkspace) Cleanup(ctx context.Context, issue domain.Issue) error { return nil }
+
+func (m *mockWorkspace) Path(issue domain.Issue) string {
+	return filepath.Join(m.root, fmt.Sprintf("issue-%d", issue.ID))
+}
+
+func TestDispatchPRFixUsesCorrectHookAndBranch(t *testing.T) {
+	cfg := &config.Config{
+		GitHub: config.GitHubConfig{
+			Token: "tok", Repos: []string{"o/r"}, EligibleLabels: []string{"gopilot"},
+		},
+		Polling: config.PollingConfig{IntervalMS: 1000, MaxConcurrentAgents: 3},
+		Agent: config.AgentConfig{
+			Command: "mock", TurnTimeoutMS: 60000, StallTimeoutMS: 60000,
+			MaxRetries: 3, MaxRetryBackoffMS: 1000, MaxAutopilotContinues: 5,
+		},
+		Workspace: config.WorkspaceConfig{Root: t.TempDir(), HookTimeoutMS: 5000},
+		Prompt:    "Work",
+		PRMonitoring: config.PRMonitoringConfig{
+			Enabled:        true,
+			PollIntervalMS: 1,
+			Label:          "gopilot",
+			MaxFixAttempts: 2,
+			LogTruncateLen: 2000,
+		},
+	}
+
+	gh := &mockGitHubPR{
+		prs: []domain.PullRequest{
+			{Number: 27, Repo: "o/r", HeadRef: "gopilot/issue-15", HeadSHA: "abc123", State: "open", Title: "feat: something"},
+		},
+		checkRuns: map[string][]domain.CheckRun{
+			"abc123": {
+				{ID: 1, Name: "test", Status: "completed", Conclusion: "failure"},
+			},
+		},
+		checkLogs: map[int64]string{1: "test failed"},
+	}
+	ag := &mockAgent{}
+	ws := &mockWorkspace{root: t.TempDir()}
+	orch := NewOrchestrator(cfg, gh, map[string]agent.Runner{"mock": ag})
+	orch.workspace = ws
+
+	ctx := context.Background()
+	orch.monitorPRs(ctx)
+
+	// Verify the before_pr_fix hook was called (not before_run)
+	if len(ws.hookCalls) == 0 {
+		t.Fatal("expected at least one hook call")
+	}
+	if ws.hookCalls[0].hook != "before_pr_fix" {
+		t.Errorf("hook = %q, want %q", ws.hookCalls[0].hook, "before_pr_fix")
+	}
+	// Verify the Branch field was set to the PR's HeadRef
+	if ws.hookCalls[0].issue.Branch != "gopilot/issue-15" {
+		t.Errorf("Branch = %q, want %q", ws.hookCalls[0].issue.Branch, "gopilot/issue-15")
 	}
 }
 

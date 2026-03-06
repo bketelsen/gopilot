@@ -720,10 +720,11 @@ func (o *Orchestrator) dispatchPRFix(ctx context.Context, fix *domain.PRFixEntry
 
 	// Create a synthetic issue to reuse workspace infrastructure.
 	syntheticIssue := domain.Issue{
-		ID:    fix.PR.Number + 1000000, // Offset to avoid collision with real issues
-		Repo:  fix.PR.Repo,
-		Title: fmt.Sprintf("PR Fix: %s", fix.PR.Title),
-		URL:   fix.PR.URL,
+		ID:     fix.PR.Number + 1000000, // Offset to avoid collision with real issues
+		Repo:   fix.PR.Repo,
+		Title:  fmt.Sprintf("PR Fix: %s", fix.PR.Title),
+		URL:    fix.PR.URL,
+		Branch: fix.PR.HeadRef,
 	}
 
 	wsPath, err := o.workspace.Ensure(ctx, syntheticIssue)
@@ -732,8 +733,8 @@ func (o *Orchestrator) dispatchPRFix(ctx context.Context, fix *domain.PRFixEntry
 		return
 	}
 
-	if err := o.workspace.RunHook(ctx, "before_run", wsPath, syntheticIssue); err != nil {
-		log.Error("before_run hook failed for PR fix", "error", err)
+	if err := o.workspace.RunHook(ctx, "before_pr_fix", wsPath, syntheticIssue); err != nil {
+		log.Error("before_pr_fix hook failed for PR fix", "error", err)
 		return
 	}
 
