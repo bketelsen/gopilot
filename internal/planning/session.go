@@ -1,6 +1,7 @@
 package planning
 
 import (
+	"encoding/json"
 	"sync"
 	"time"
 )
@@ -17,9 +18,10 @@ const (
 
 // ChatMessage is a single message in a planning conversation.
 type ChatMessage struct {
-	Role      string    `json:"role"` // "user" or "agent"
-	Content   string    `json:"content"`
-	Timestamp time.Time `json:"timestamp"`
+	Role      string            `json:"role"` // "user" or "agent"
+	Content   string            `json:"content"`
+	Events    []json.RawMessage `json:"events,omitempty"`
+	Timestamp time.Time         `json:"timestamp"`
 }
 
 // Session holds the state and message history of a planning session.
@@ -41,6 +43,18 @@ func (s *Session) AddMessage(role, content string) {
 	s.Messages = append(s.Messages, ChatMessage{
 		Role:      role,
 		Content:   content,
+		Timestamp: time.Now(),
+	})
+}
+
+// AddAgentMessage appends an agent message with both text summary and raw events.
+func (s *Session) AddAgentMessage(content string, events []json.RawMessage) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.Messages = append(s.Messages, ChatMessage{
+		Role:      "agent",
+		Content:   content,
+		Events:    events,
 		Timestamp: time.Now(),
 	})
 }
