@@ -1,0 +1,9 @@
+.git
+workspaces
+test-workspaces
+research
+docs/plans
+*.md
+!README.md
+bin/
+gopilot

@@ -1,0 +1,79 @@
+version: 2
+
+before:
+  hooks:
+    - sh -c "$(curl --location https://taskfile.dev/install.sh)" -- -d -b /usr/local/bin
+    - task generate
+    - task css
+
+builds:
+  - main: ./cmd/gopilot
+    binary: gopilot
+    ldflags:
+      - -s -w -X main.Version={{.Version}}
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+
+archives:
+  - format: tar.gz
+    format_overrides:
+      - goos: windows
+        format: zip
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^ci:"
+
+brews:
+  - repository:
+      owner: bketelsen
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    homepage: https://github.com/bketelsen/gopilot
+    description: An AI agent orchestrator for GitHub Issues
+    license: MIT
+    install: |
+      bin.install "gopilot"
+    test: |
+      system "#{bin}/gopilot", "version"
+
+dockers:
+  - image_templates:
+      - "ghcr.io/bketelsen/gopilot:{{ .Version }}-amd64"
+    use: buildx
+    build_flag_templates:
+      - "--platform=linux/amd64"
+    dockerfile: Dockerfile.goreleaser
+  - image_templates:
+      - "ghcr.io/bketelsen/gopilot:{{ .Version }}-arm64"
+    use: buildx
+    build_flag_templates:
+      - "--platform=linux/arm64"
+    goarch: arm64
+    dockerfile: Dockerfile.goreleaser
+
+docker_manifests:
+  - name_template: "ghcr.io/bketelsen/gopilot:{{ .Version }}"
+    image_templates:
+      - "ghcr.io/bketelsen/gopilot:{{ .Version }}-amd64"
+      - "ghcr.io/bketelsen/gopilot:{{ .Version }}-arm64"
+  - name_template: "ghcr.io/bketelsen/gopilot:latest"
+    image_templates:
+      - "ghcr.io/bketelsen/gopilot:{{ .Version }}-amd64"
+      - "ghcr.io/bketelsen/gopilot:{{ .Version }}-arm64"

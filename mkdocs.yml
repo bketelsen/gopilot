@@ -1,0 +1,54 @@
+site_name: Gopilot
+site_url: https://bketelsen.github.io/gopilot/
+site_description: An AI agent orchestrator for GitHub Issues
+repo_url: https://github.com/bketelsen/gopilot
+repo_name: bketelsen/gopilot
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.action.edit
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.tabbed:
+      alternate_style: true
+  - tables
+  - attr_list
+
+exclude_docs: |
+  plans/
+
+nav:
+  - Home: index.md
+  - Getting Started: getting-started.md
+  - Configuration: configuration.md
+  - Writing Skills: skills.md
+  - CLI Reference: cli.md
+  - Architecture: architecture.md
+  - Dashboard: dashboard.md
