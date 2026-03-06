@@ -36,10 +36,19 @@ tasks:
     cmds:
       - go test -race ./...
 
+  golangci-lint:
+    desc: Install golangci-lint
+    status:
+      - test -f bin/golangci-lint
+    cmds:
+      - mkdir -p bin
+      - curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/HEAD/install.sh | sh -s -- -b bin
+
   lint:
     desc: Run golangci-lint
+    deps: [golangci-lint]
     cmds:
-      - golangci-lint run ./...
+      - bin/golangci-lint run ./...
 
   clean:
     desc: Remove build artifacts

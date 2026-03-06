@@ -14,7 +14,7 @@ Uses [Task](https://taskfile.dev/) as the build system (see `Taskfile.yml`):
 task build          # Generate templ + CSS, then build binary (output: ./gopilot)
 task dev            # Build and run the binary
 task test           # Run tests with race detector: go test -race ./...
-task lint           # Run golangci-lint: golangci-lint run ./...
+task lint           # Install (if needed) and run golangci-lint
 task generate       # Generate templ templates: go tool templ generate
 task css            # Build Tailwind CSS
 task clean          # Remove build artifacts
@@ -73,6 +73,11 @@ Build order matters: `generate` must run before `css`, both before `build`.
 | `internal/config/` | YAML config structs, loader, fsnotify watcher |
 | `internal/domain/` | Core types: Issue, RunEntry, CompletedRun, AgentEvent |
 | `skills/` | Runtime skill definitions (SKILL.md files) |
+
+## Code Quality
+
+- **Always run `task lint` before committing code changes.** Fix all lint issues before considering work complete.
+- The linter (`golangci-lint`) is auto-installed to `bin/` on first run via the `golangci-lint` task dependency.
 
 ## Testing Patterns
 

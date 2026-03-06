@@ -2,7 +2,6 @@ package orchestrator
 
 import (
 	"context"
-	"io"
 	"testing"
 	"time"
 
@@ -239,29 +238,6 @@ func (m *mockAgentSlowOutput) Start(ctx context.Context, workspace string, promp
 	}, nil
 }
 func (m *mockAgentSlowOutput) Stop(sess *agent.Session) error {
-	sess.Cancel()
-	return nil
-}
-
-// mockAgentWithPipe lets us control the stdout writer for testing the pipe is passed.
-type mockAgentWithPipe struct {
-	stdout io.Writer
-}
-
-func (m *mockAgentWithPipe) Name() string { return "mock-pipe" }
-func (m *mockAgentWithPipe) Start(ctx context.Context, workspace string, prompt string, opts agent.AgentOpts) (*agent.Session, error) {
-	m.stdout = opts.Stdout
-	done := make(chan struct{})
-	go func() {
-		<-ctx.Done()
-		close(done)
-	}()
-	return &agent.Session{
-		ID: "pipe-session", PID: 22222, Done: done,
-		Cancel: func() {},
-	}, nil
-}
-func (m *mockAgentWithPipe) Stop(sess *agent.Session) error {
 	sess.Cancel()
 	return nil
 }
