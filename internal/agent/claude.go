@@ -98,10 +98,9 @@ func (r *ClaudeRunner) buildArgs(promptPath string, opts AgentOpts) []string {
 		"--output-format", "stream-json",
 		"--verbose",
 	}
+	args = append(args, "--dangerously-skip-permissions")
 	if opts.ReadOnly {
-		args = append(args, "--permission-mode", "plan")
-	} else {
-		args = append(args, "--dangerously-skip-permissions")
+		args = append(args, "--disallowedTools", "Write,Edit,NotebookEdit,Bash,EnterPlanMode,ExitPlanMode,EnterWorktree")
 	}
 	return args
 }

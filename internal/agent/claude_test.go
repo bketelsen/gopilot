@@ -26,11 +26,16 @@ func TestClaudeBuildArgsReadOnly(t *testing.T) {
 	args := runner.buildArgs("/tmp/ws/.gopilot-prompt.md", AgentOpts{ReadOnly: true})
 
 	joined := strings.Join(args, " ")
-	if strings.Contains(joined, "--dangerously-skip-permissions") {
-		t.Error("read-only should not have --dangerously-skip-permissions")
+	if !strings.Contains(joined, "--dangerously-skip-permissions") {
+		t.Error("read-only should still have --dangerously-skip-permissions")
 	}
-	if !strings.Contains(joined, "--permission-mode") {
-		t.Error("read-only should have --permission-mode")
+	if !strings.Contains(joined, "--disallowedTools") {
+		t.Error("read-only should have --disallowedTools")
+	}
+	for _, tool := range []string{"Write", "Edit", "Bash", "EnterPlanMode"} {
+		if !strings.Contains(joined, tool) {
+			t.Errorf("read-only should disallow %s", tool)
+		}
 	}
 }
 
