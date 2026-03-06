@@ -244,6 +244,61 @@ func TestHandler_StreamJSONParsing(t *testing.T) {
 	}
 }
 
+func TestHandler_ReplayWithEvents(t *testing.T) {
+	mgr := planning.NewManager()
+	sess, _ := mgr.Create("owner/repo", nil)
+
+	// Simulate a session with prior agent events
+	sess.AddMessage("user", "analyze the code")
+	event1, _ := json.Marshal(map[string]any{"source": "claude", "type": "assistant", "content_blocks": []any{map[string]any{"type": "text", "text": "analysis"}}})
+	event2, _ := json.Marshal(map[string]any{"source": "claude", "type": "result", "duration_ms": 1000})
+	sess.AddAgentMessage("analysis", []json.RawMessage{event1, event2})
+
+	h := planning.NewHandler(mgr, &fakeRunner{}, planning.HandlerConfig{
+		WorkspaceRoot: t.TempDir(),
+	})
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h.HandleWebSocket(w, r, sess.ID)
+	}))
+	defer srv.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	conn, _, err := websocket.Dial(ctx, wsURL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.CloseNow()
+
+	// Expect: user msg, 2 agent_events, then status
+	var msgs []planning.WSMessage
+	for i := 0; i < 4; i++ {
+		_, data, err := conn.Read(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var msg planning.WSMessage
+		json.Unmarshal(data, &msg)
+		msgs = append(msgs, msg)
+	}
+
+	if msgs[0].Type != "user" {
+		t.Errorf("msgs[0]: expected user, got %s", msgs[0].Type)
+	}
+	if msgs[1].Type != "agent_event" {
+		t.Errorf("msgs[1]: expected agent_event, got %s", msgs[1].Type)
+	}
+	if msgs[2].Type != "agent_event" {
+		t.Errorf("msgs[2]: expected agent_event, got %s", msgs[2].Type)
+	}
+	if msgs[3].Type != "status" {
+		t.Errorf("msgs[3]: expected status, got %s", msgs[3].Type)
+	}
+}
+
 func TestHandler_ReplayMessages(t *testing.T) {
 	mgr := planning.NewManager()
 	sess, _ := mgr.Create("owner/repo", nil)
