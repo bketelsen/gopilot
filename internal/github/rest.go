@@ -400,6 +400,127 @@ func (c *RESTClient) AddSubIssue(ctx context.Context, repo string, parentID, chi
 	return nil
 }
 
+// RepoLabel represents a GitHub repository label.
+type RepoLabel struct {
+	Name        string `json:"name"`
+	Color       string `json:"color"`
+	Description string `json:"description"`
+}
+
+// GetRepoLabel fetches a repository-level label by name.
+// Returns nil, nil if the label does not exist (404).
+func (c *RESTClient) GetRepoLabel(ctx context.Context, repo string, name string) (*RepoLabel, error) {
+	parts := strings.SplitN(repo, "/", 2)
+	if len(parts) != 2 {
+		return nil, fmt.Errorf("invalid repo: %s", repo)
+	}
+	url := fmt.Sprintf("%srepos/%s/%s/labels/%s", c.baseURL, parts[0], parts[1], neturl.PathEscape(name))
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "token "+c.cfg.Token)
+	req.Header.Set("Accept", "application/vnd.github+json")
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	c.updateRateLimit(resp)
+
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, nil
+	}
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("GitHub API error %d: %s", resp.StatusCode, body)
+	}
+
+	var label RepoLabel
+	if err := json.NewDecoder(resp.Body).Decode(&label); err != nil {
+		return nil, err
+	}
+	return &label, nil
+}
+
+// CreateRepoLabel creates a new label on a repository.
+func (c *RESTClient) CreateRepoLabel(ctx context.Context, repo, name, color, description string) error {
+	parts := strings.SplitN(repo, "/", 2)
+	if len(parts) != 2 {
+		return fmt.Errorf("invalid repo: %s", repo)
+	}
+
+	payload, err := json.Marshal(map[string]string{
+		"name":        name,
+		"color":       color,
+		"description": description,
+	})
+	if err != nil {
+		return err
+	}
+
+	url := fmt.Sprintf("%srepos/%s/%s/labels", c.baseURL, parts[0], parts[1])
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(payload))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "token "+c.cfg.Token)
+	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	c.updateRateLimit(resp)
+
+	if resp.StatusCode != http.StatusCreated {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("GitHub API error %d: %s", resp.StatusCode, body)
+	}
+	return nil
+}
+
+// UpdateRepoLabel updates an existing label's color and description.
+func (c *RESTClient) UpdateRepoLabel(ctx context.Context, repo, name, color, description string) error {
+	parts := strings.SplitN(repo, "/", 2)
+	if len(parts) != 2 {
+		return fmt.Errorf("invalid repo: %s", repo)
+	}
+
+	payload, err := json.Marshal(map[string]string{
+		"color":       color,
+		"description": description,
+	})
+	if err != nil {
+		return err
+	}
+
+	url := fmt.Sprintf("%srepos/%s/%s/labels/%s", c.baseURL, parts[0], parts[1], neturl.PathEscape(name))
+	req, err := http.NewRequestWithContext(ctx, "PATCH", url, bytes.NewReader(payload))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "token "+c.cfg.Token)
+	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	c.updateRateLimit(resp)
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("GitHub API error %d: %s", resp.StatusCode, body)
+	}
+	return nil
+}
+
 // ghIssue is the raw GitHub API response shape.
 type ghIssue struct {
 	Number    int       `json:"number"`

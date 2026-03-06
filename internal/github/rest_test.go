@@ -208,6 +208,105 @@ func TestRemoveLabelURLEncoding(t *testing.T) {
 	}
 }
 
+func TestGetRepoLabel(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /repos/owner/repo/labels/gopilot", func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]any{
+			"name":        "gopilot",
+			"color":       "0052CC",
+			"description": "Eligible for Gopilot agent dispatch",
+		})
+	})
+	mux.HandleFunc("GET /repos/owner/repo/labels/missing", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		w.Write([]byte(`{"message":"Not Found"}`))
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	cfg := config.GitHubConfig{Token: "test-token", Repos: []string{"owner/repo"}}
+	client := NewRESTClient(cfg, server.URL+"/")
+
+	// Existing label
+	label, err := client.GetRepoLabel(context.Background(), "owner/repo", "gopilot")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if label == nil {
+		t.Fatal("expected label, got nil")
+	}
+	if label.Name != "gopilot" {
+		t.Errorf("name = %q, want %q", label.Name, "gopilot")
+	}
+	if label.Color != "0052CC" {
+		t.Errorf("color = %q, want %q", label.Color, "0052CC")
+	}
+
+	// Missing label
+	label, err = client.GetRepoLabel(context.Background(), "owner/repo", "missing")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if label != nil {
+		t.Errorf("expected nil for missing label, got %+v", label)
+	}
+}
+
+func TestCreateRepoLabel(t *testing.T) {
+	var received map[string]any
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /repos/owner/repo/labels", func(w http.ResponseWriter, r *http.Request) {
+		json.NewDecoder(r.Body).Decode(&received)
+		w.WriteHeader(http.StatusCreated)
+		w.Write([]byte(`{}`))
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	cfg := config.GitHubConfig{Token: "test-token", Repos: []string{"owner/repo"}}
+	client := NewRESTClient(cfg, server.URL+"/")
+
+	err := client.CreateRepoLabel(context.Background(), "owner/repo", "gopilot", "0052CC", "Eligible for Gopilot agent dispatch")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if received["name"] != "gopilot" {
+		t.Errorf("name = %v, want gopilot", received["name"])
+	}
+	if received["color"] != "0052CC" {
+		t.Errorf("color = %v, want 0052CC", received["color"])
+	}
+	if received["description"] != "Eligible for Gopilot agent dispatch" {
+		t.Errorf("description = %v, want correct description", received["description"])
+	}
+}
+
+func TestUpdateRepoLabel(t *testing.T) {
+	var received map[string]any
+	mux := http.NewServeMux()
+	mux.HandleFunc("PATCH /repos/owner/repo/labels/gopilot", func(w http.ResponseWriter, r *http.Request) {
+		json.NewDecoder(r.Body).Decode(&received)
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{}`))
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	cfg := config.GitHubConfig{Token: "test-token", Repos: []string{"owner/repo"}}
+	client := NewRESTClient(cfg, server.URL+"/")
+
+	err := client.UpdateRepoLabel(context.Background(), "owner/repo", "gopilot", "0052CC", "Updated description")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if received["color"] != "0052CC" {
+		t.Errorf("color = %v, want 0052CC", received["color"])
+	}
+	if received["description"] != "Updated description" {
+		t.Errorf("description = %v, want Updated description", received["description"])
+	}
+}
+
 func TestAddSubIssue(t *testing.T) {
 	var called bool
 	mux := http.NewServeMux()
