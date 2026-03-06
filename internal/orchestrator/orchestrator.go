@@ -236,6 +236,16 @@ func (o *Orchestrator) Tick(ctx context.Context) {
 		}
 	}
 
+	// Enrich candidates with linked PR data
+	for i := range issues {
+		prs, err := o.github.FetchLinkedPullRequests(ctx, issues[i].Repo, issues[i].ID)
+		if err != nil {
+			slog.Warn("failed to fetch linked PRs", "issue", issues[i].Identifier(), "error", err)
+			continue
+		}
+		issues[i].LinkedPRs = prs
+	}
+
 	// Build resolved map for blocking check
 	resolved := make(map[int]bool)
 	for _, issue := range issues {
@@ -251,6 +261,10 @@ func (o *Orchestrator) Tick(ctx context.Context) {
 		}
 		if issue.IsBlocked(resolved) {
 			slog.Debug("skipping blocked issue", "issue", issue.Identifier(), "blocked_by", issue.BlockedBy)
+			continue
+		}
+		if issue.HasOpenPR() {
+			slog.Info("skipping issue with open PR", "issue", issue.Identifier())
 			continue
 		}
 		candidates = append(candidates, issue)
