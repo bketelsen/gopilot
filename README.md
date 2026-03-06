@@ -12,7 +12,7 @@ An AI agent orchestrator that dispatches coding agents to work on GitHub issues 
 - **Real-time dashboard** -- HTMX + SSE-powered web UI showing active agents, metrics, and logs with live updates.
 - **Config hot-reload** -- Change polling intervals, concurrency limits, agent selection, and skill settings without restarting.
 - **Retry with backoff** -- Failed agents get exponential backoff retries with stall detection and automatic cleanup.
-- **Interactive planning** -- AI-driven issue refinement and planning before coding begins.
+- **Interactive planning** -- Dashboard-based chat UI where agents explore the codebase and collaboratively build structured plans with you.
 
 ## Quick Install
 
