@@ -38,6 +38,11 @@ type State struct {
 	completed map[int]bool
 	planning  map[int]*PlanningEntry
 	totals    domain.TokenTotals
+
+	// PR monitoring state (keyed by PR number)
+	prFixes   map[int]*domain.PRFixEntry
+	prRunning map[int]*domain.RunEntry
+	prHistory map[int][]domain.CompletedRun
 }
 
 // NewState creates an empty state.
@@ -49,6 +54,9 @@ func NewState() *State {
 		history:   make(map[int][]domain.CompletedRun),
 		completed: make(map[int]bool),
 		planning:  make(map[int]*PlanningEntry),
+		prFixes:   make(map[int]*domain.PRFixEntry),
+		prRunning: make(map[int]*domain.RunEntry),
+		prHistory: make(map[int][]domain.CompletedRun),
 	}
 }
 
@@ -256,6 +264,105 @@ func (a *StatePlanningAdapter) AllPlanning() []*domain.PlanningEntry {
 // PlanningCount returns the number of active planning sessions.
 func (a *StatePlanningAdapter) PlanningCount() int {
 	return a.State.PlanningCount()
+}
+
+// --- PR Monitoring State ---
+
+// AddPRFix registers a PR fix entry for the given PR number.
+func (s *State) AddPRFix(prNumber int, entry *domain.PRFixEntry) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.prFixes[prNumber] = entry
+}
+
+// GetPRFix returns the PR fix entry for the given PR number, or nil.
+func (s *State) GetPRFix(prNumber int) *domain.PRFixEntry {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.prFixes[prNumber]
+}
+
+// RemovePRFix removes the PR fix entry for the given PR number.
+func (s *State) RemovePRFix(prNumber int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.prFixes, prNumber)
+}
+
+// AllPRFixes returns a snapshot of all pending PR fix entries.
+func (s *State) AllPRFixes() []*domain.PRFixEntry {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	entries := make([]*domain.PRFixEntry, 0, len(s.prFixes))
+	for _, e := range s.prFixes {
+		entries = append(entries, e)
+	}
+	return entries
+}
+
+// IsPRBeingFixed reports whether the given PR has an active fix session.
+func (s *State) IsPRBeingFixed(prNumber int) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	_, running := s.prRunning[prNumber]
+	_, queued := s.prFixes[prNumber]
+	return running || queued
+}
+
+// AddPRRunning registers an active fix session for the given PR.
+func (s *State) AddPRRunning(prNumber int, entry *domain.RunEntry) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.prRunning[prNumber] = entry
+}
+
+// RemovePRRunning removes the active fix session for the given PR.
+func (s *State) RemovePRRunning(prNumber int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.prRunning, prNumber)
+}
+
+// GetPRRunning returns the active run entry for the given PR, or nil.
+func (s *State) GetPRRunning(prNumber int) *domain.RunEntry {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.prRunning[prNumber]
+}
+
+// AllPRRunning returns a snapshot of all active PR fix sessions.
+func (s *State) AllPRRunning() []*domain.RunEntry {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	entries := make([]*domain.RunEntry, 0, len(s.prRunning))
+	for _, e := range s.prRunning {
+		entries = append(entries, e)
+	}
+	return entries
+}
+
+// PRRunningCount returns the number of active PR fix sessions.
+func (s *State) PRRunningCount() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return len(s.prRunning)
+}
+
+// AddPRHistory appends a completed run to the PR's fix history.
+func (s *State) AddPRHistory(prNumber int, run domain.CompletedRun) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.prHistory[prNumber] = append(s.prHistory[prNumber], run)
+}
+
+// GetPRHistory returns a copy of the completed fix history for the given PR.
+func (s *State) GetPRHistory(prNumber int) []domain.CompletedRun {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	h := s.prHistory[prNumber]
+	out := make([]domain.CompletedRun, len(h))
+	copy(out, h)
+	return out
 }
 
 // AllDomainPlanning returns planning entries as domain types for the web layer.

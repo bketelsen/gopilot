@@ -164,3 +164,80 @@ func TestTokenCountsAdd(t *testing.T) {
 		t.Errorf("Add() = %+v, want {300, 150, 450}", sum)
 	}
 }
+
+func TestPullRequestIdentifier(t *testing.T) {
+	pr := PullRequest{Number: 22, Repo: "owner/repo"}
+	if got := pr.Identifier(); got != "owner/repo#22" {
+		t.Errorf("Identifier() = %q, want %q", got, "owner/repo#22")
+	}
+}
+
+func TestPullRequestHasFailedChecks(t *testing.T) {
+	tests := []struct {
+		name      string
+		checkRuns []CheckRun
+		want      bool
+	}{
+		{"no checks", nil, false},
+		{"all passing", []CheckRun{
+			{Name: "test", Status: "completed", Conclusion: "success"},
+		}, false},
+		{"one failure", []CheckRun{
+			{Name: "test", Status: "completed", Conclusion: "success"},
+			{Name: "lint", Status: "completed", Conclusion: "failure"},
+		}, true},
+		{"in progress ignored", []CheckRun{
+			{Name: "test", Status: "in_progress", Conclusion: ""},
+		}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pr := PullRequest{CheckRuns: tt.checkRuns}
+			if got := pr.HasFailedChecks(); got != tt.want {
+				t.Errorf("HasFailedChecks() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestPullRequestFailedCheckRuns(t *testing.T) {
+	pr := PullRequest{
+		CheckRuns: []CheckRun{
+			{Name: "test", Status: "completed", Conclusion: "success"},
+			{Name: "lint", Status: "completed", Conclusion: "failure"},
+			{Name: "build", Status: "completed", Conclusion: "failure"},
+		},
+	}
+	failed := pr.FailedCheckRuns()
+	if len(failed) != 2 {
+		t.Fatalf("FailedCheckRuns() returned %d, want 2", len(failed))
+	}
+	if failed[0].Name != "lint" || failed[1].Name != "build" {
+		t.Errorf("FailedCheckRuns() = %v, want [lint, build]", failed)
+	}
+}
+
+func TestPullRequestChecksComplete(t *testing.T) {
+	tests := []struct {
+		name      string
+		checkRuns []CheckRun
+		want      bool
+	}{
+		{"no checks", nil, false},
+		{"all completed", []CheckRun{
+			{Status: "completed", Conclusion: "success"},
+		}, true},
+		{"some in progress", []CheckRun{
+			{Status: "completed", Conclusion: "success"},
+			{Status: "in_progress"},
+		}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pr := PullRequest{CheckRuns: tt.checkRuns}
+			if got := pr.ChecksComplete(); got != tt.want {
+				t.Errorf("ChecksComplete() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

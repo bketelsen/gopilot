@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	neturl "net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -523,6 +524,227 @@ func (c *RESTClient) UpdateRepoLabel(ctx context.Context, repo, name, color, des
 		return fmt.Errorf("update label %q in %s: %w", name, repo, newAPIError(resp.StatusCode, string(body)))
 	}
 	return nil
+}
+
+// ghPullRequest is the raw GitHub API response shape for pull requests.
+type ghPullRequest struct {
+	Number  int       `json:"number"`
+	Title   string    `json:"title"`
+	State   string    `json:"state"`
+	HTMLURL string    `json:"html_url"`
+	Body    string    `json:"body"`
+	Labels  []ghLabel `json:"labels"`
+	Head    struct {
+		Ref string `json:"ref"`
+		SHA string `json:"sha"`
+	} `json:"head"`
+}
+
+// ghCheckRunsResponse is the GitHub API response for check runs.
+type ghCheckRunsResponse struct {
+	TotalCount int          `json:"total_count"`
+	CheckRuns  []ghCheckRun `json:"check_runs"`
+}
+
+type ghCheckRun struct {
+	ID         int64  `json:"id"`
+	Name       string `json:"name"`
+	Status     string `json:"status"`
+	Conclusion string `json:"conclusion"`
+	DetailsURL string `json:"details_url"`
+	Output     struct {
+		Title   string `json:"title"`
+		Summary string `json:"summary"`
+		Text    string `json:"text"`
+	} `json:"output"`
+}
+
+// FetchMonitoredPRs returns open PRs with the given label across all configured repos.
+func (c *RESTClient) FetchMonitoredPRs(ctx context.Context, label string) ([]domain.PullRequest, error) {
+	var all []domain.PullRequest
+	for _, repo := range c.cfg.Repos {
+		prs, err := c.fetchRepoPRs(ctx, repo, label)
+		if err != nil {
+			return nil, fmt.Errorf("fetching PRs for %s: %w", repo, err)
+		}
+		all = append(all, prs...)
+	}
+	return all, nil
+}
+
+func (c *RESTClient) fetchRepoPRs(ctx context.Context, repo, label string) ([]domain.PullRequest, error) {
+	parts := strings.SplitN(repo, "/", 2)
+	if len(parts) != 2 {
+		return nil, fmt.Errorf("invalid repo format: %s", repo)
+	}
+	owner, name := parts[0], parts[1]
+
+	url := fmt.Sprintf("%srepos/%s/%s/pulls?state=open&per_page=100", c.baseURL, owner, name)
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("fetch PRs for %s: %w", repo, err)
+	}
+	req.Header.Set("Authorization", "token "+c.cfg.Token)
+	req.Header.Set("Accept", "application/vnd.github+json")
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("fetch PRs for %s: %w", repo, err)
+	}
+	defer resp.Body.Close()
+	c.updateRateLimit(resp)
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("fetch PRs for %s: %w", repo, newAPIError(resp.StatusCode, string(body)))
+	}
+
+	var raw []ghPullRequest
+	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
+		return nil, fmt.Errorf("decoding PRs: %w", err)
+	}
+
+	var prs []domain.PullRequest
+	for _, r := range raw {
+		if !hasLabel(r.Labels, label) {
+			continue
+		}
+		pr := domain.PullRequest{
+			Number:  r.Number,
+			Repo:    repo,
+			HeadRef: r.Head.Ref,
+			HeadSHA: r.Head.SHA,
+			URL:     r.HTMLURL,
+			State:   r.State,
+			Title:   r.Title,
+		}
+		// Try to extract originating issue from "Closes #N" in body
+		pr.IssueID = parseClosesIssue(r.Body)
+		prs = append(prs, pr)
+	}
+	return prs, nil
+}
+
+func hasLabel(labels []ghLabel, target string) bool {
+	for _, l := range labels {
+		if strings.EqualFold(l.Name, target) {
+			return true
+		}
+	}
+	return false
+}
+
+var closesRegex = regexp.MustCompile(`(?i)(?:closes|fixes|resolves)\s+#(\d+)`)
+
+func parseClosesIssue(body string) int {
+	matches := closesRegex.FindStringSubmatch(body)
+	if len(matches) >= 2 {
+		var id int
+		fmt.Sscanf(matches[1], "%d", &id)
+		return id
+	}
+	return 0
+}
+
+// FetchCheckRuns returns the check runs for a given commit ref.
+func (c *RESTClient) FetchCheckRuns(ctx context.Context, repo string, ref string) ([]domain.CheckRun, error) {
+	parts := strings.SplitN(repo, "/", 2)
+	if len(parts) != 2 {
+		return nil, fmt.Errorf("invalid repo: %s", repo)
+	}
+	url := fmt.Sprintf("%srepos/%s/%s/commits/%s/check-runs", c.baseURL, parts[0], parts[1], ref)
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("fetch check runs for %s@%s: %w", repo, ref, err)
+	}
+	req.Header.Set("Authorization", "token "+c.cfg.Token)
+	req.Header.Set("Accept", "application/vnd.github+json")
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("fetch check runs for %s@%s: %w", repo, ref, err)
+	}
+	defer resp.Body.Close()
+	c.updateRateLimit(resp)
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("fetch check runs for %s@%s: %w", repo, ref, newAPIError(resp.StatusCode, string(body)))
+	}
+
+	var raw ghCheckRunsResponse
+	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
+		return nil, fmt.Errorf("decoding check runs: %w", err)
+	}
+
+	runs := make([]domain.CheckRun, len(raw.CheckRuns))
+	for i, r := range raw.CheckRuns {
+		runs[i] = domain.CheckRun{
+			ID:         r.ID,
+			Name:       r.Name,
+			Status:     r.Status,
+			Conclusion: r.Conclusion,
+			DetailsURL: r.DetailsURL,
+		}
+	}
+	return runs, nil
+}
+
+// FetchCheckRunLog returns a truncated annotation/output for a failed check run.
+func (c *RESTClient) FetchCheckRunLog(ctx context.Context, repo string, checkRunID int64) (string, error) {
+	parts := strings.SplitN(repo, "/", 2)
+	if len(parts) != 2 {
+		return "", fmt.Errorf("invalid repo: %s", repo)
+	}
+
+	// Fetch annotations for the check run (contains failure messages)
+	url := fmt.Sprintf("%srepos/%s/%s/check-runs/%d/annotations", c.baseURL, parts[0], parts[1], checkRunID)
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return "", fmt.Errorf("fetch check run annotations %s/%d: %w", repo, checkRunID, err)
+	}
+	req.Header.Set("Authorization", "token "+c.cfg.Token)
+	req.Header.Set("Accept", "application/vnd.github+json")
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("fetch check run annotations %s/%d: %w", repo, checkRunID, err)
+	}
+	defer resp.Body.Close()
+	c.updateRateLimit(resp)
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("fetch check run annotations %s/%d: %w", repo, checkRunID, newAPIError(resp.StatusCode, string(body)))
+	}
+
+	var annotations []struct {
+		Message string `json:"message"`
+		Title   string `json:"title"`
+		Path    string `json:"path"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&annotations); err != nil {
+		return "", fmt.Errorf("decoding annotations: %w", err)
+	}
+
+	var sb strings.Builder
+	for _, a := range annotations {
+		if sb.Len() > 0 {
+			sb.WriteString("\n")
+		}
+		if a.Path != "" {
+			sb.WriteString(a.Path + ": ")
+		}
+		if a.Title != "" {
+			sb.WriteString(a.Title + " — ")
+		}
+		sb.WriteString(a.Message)
+		if sb.Len() > 2000 {
+			sb.WriteString("\n... (truncated)")
+			break
+		}
+	}
+	return sb.String(), nil
 }
 
 // ghIssue is the raw GitHub API response shape.

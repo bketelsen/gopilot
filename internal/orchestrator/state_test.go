@@ -162,3 +162,83 @@ func TestUpdatePlanning(t *testing.T) {
 		t.Error("callback should not be invoked for non-existent entry")
 	})
 }
+
+func TestPRFixState(t *testing.T) {
+	s := NewState()
+
+	if s.IsPRBeingFixed(22) {
+		t.Error("PR should not be marked as being fixed initially")
+	}
+
+	fix := &domain.PRFixEntry{
+		PR:          domain.PullRequest{Number: 22, Repo: "o/r"},
+		Attempt:     1,
+		MaxAttempts: 2,
+		NextRetryAt: time.Now(),
+	}
+	s.AddPRFix(22, fix)
+
+	if !s.IsPRBeingFixed(22) {
+		t.Error("PR should be marked as being fixed after AddPRFix")
+	}
+	if got := s.GetPRFix(22); got != fix {
+		t.Error("GetPRFix should return the entry")
+	}
+	if len(s.AllPRFixes()) != 1 {
+		t.Errorf("AllPRFixes len = %d, want 1", len(s.AllPRFixes()))
+	}
+
+	s.RemovePRFix(22)
+	if s.GetPRFix(22) != nil {
+		t.Error("GetPRFix after remove should return nil")
+	}
+}
+
+func TestPRRunningState(t *testing.T) {
+	s := NewState()
+
+	entry := &domain.RunEntry{
+		Issue:     domain.Issue{ID: 1000022},
+		SessionID: "pr-fix-sess",
+		StartedAt: time.Now(),
+	}
+	s.AddPRRunning(22, entry)
+
+	if !s.IsPRBeingFixed(22) {
+		t.Error("PR should be marked as being fixed when running")
+	}
+	if s.PRRunningCount() != 1 {
+		t.Errorf("PRRunningCount = %d, want 1", s.PRRunningCount())
+	}
+	if got := s.GetPRRunning(22); got != entry {
+		t.Error("GetPRRunning should return the entry")
+	}
+	if len(s.AllPRRunning()) != 1 {
+		t.Errorf("AllPRRunning len = %d, want 1", len(s.AllPRRunning()))
+	}
+
+	s.RemovePRRunning(22)
+	if s.PRRunningCount() != 0 {
+		t.Errorf("PRRunningCount after remove = %d, want 0", s.PRRunningCount())
+	}
+}
+
+func TestPRHistoryState(t *testing.T) {
+	s := NewState()
+
+	s.AddPRHistory(22, domain.CompletedRun{SessionID: "s1", Attempt: 1, ExitCode: 1})
+	s.AddPRHistory(22, domain.CompletedRun{SessionID: "s2", Attempt: 2, ExitCode: 0})
+
+	history := s.GetPRHistory(22)
+	if len(history) != 2 {
+		t.Fatalf("PR history len = %d, want 2", len(history))
+	}
+	if history[0].SessionID != "s1" || history[1].SessionID != "s2" {
+		t.Error("PR history order wrong")
+	}
+
+	empty := s.GetPRHistory(999)
+	if len(empty) != 0 {
+		t.Errorf("expected empty PR history for unknown PR, got %d", len(empty))
+	}
+}

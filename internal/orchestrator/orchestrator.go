@@ -33,12 +33,14 @@ type Orchestrator struct {
 	retryQueue   *RetryQueue
 	sessionsMu   sync.Mutex
 	sessions     map[int]*agent.Session
+	prSessions   map[int]*agent.Session // PR number -> active fix session
 	configPath   string
 	skills       []*skills.Skill
 	sseHub       *web.SSEHub
 	metrics      *metrics.Counters
 	tokenTracker *metrics.TokenTracker
 	rateLimitFn  func() (remaining, limit int)
+	lastPRPoll   time.Time
 }
 
 // NewOrchestrator creates a new orchestrator.
@@ -51,6 +53,7 @@ func NewOrchestrator(cfg *config.Config, github gh.Client, agents map[string]age
 		state:        NewState(),
 		retryQueue:   NewRetryQueue(),
 		sessions:     make(map[int]*agent.Session),
+		prSessions:   make(map[int]*agent.Session),
 		metrics:      metrics.NewCounters(),
 		tokenTracker: metrics.NewTokenTracker(),
 	}
@@ -89,6 +92,7 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 			o.cfg.Agent.MaxRetryBackoffMS = newCfg.Agent.MaxRetryBackoffMS
 			o.cfg.Agent.MaxAutopilotContinues = newCfg.Agent.MaxAutopilotContinues
 			o.cfg.Planning = newCfg.Planning
+			o.cfg.PRMonitoring = newCfg.PRMonitoring
 			o.cfg.Skills = newCfg.Skills
 			o.cfg.Prompt = newCfg.Prompt
 		})
@@ -168,6 +172,7 @@ func (o *Orchestrator) DryRun(ctx context.Context) error {
 func (o *Orchestrator) Tick(ctx context.Context) {
 	o.reconcile(ctx)
 	o.detectStalls(ctx)
+	o.monitorPRs(ctx)
 
 	// Process due retries before dispatching new candidates.
 	for _, retry := range o.retryQueue.DueEntries() {
@@ -566,5 +571,241 @@ func (o *Orchestrator) SetRateLimitFunc(fn func() (remaining, limit int)) {
 func (o *Orchestrator) shutdown() {
 	for _, entry := range o.state.AllRunning() {
 		slog.Info("stopping agent", "issue", entry.Issue.Identifier())
+	}
+}
+
+// monitorPRs checks labeled PRs for failed CI checks and queues fix dispatches.
+func (o *Orchestrator) monitorPRs(ctx context.Context) {
+	if !o.cfg.PRMonitoring.Enabled {
+		return
+	}
+
+	// Respect the separate PR poll interval.
+	if time.Since(o.lastPRPoll) < o.cfg.PRMonitoring.PollInterval() {
+		return
+	}
+	o.lastPRPoll = time.Now()
+
+	label := o.cfg.PRMonitoring.Label
+	prs, err := o.github.FetchMonitoredPRs(ctx, label)
+	if err != nil {
+		if errors.Is(err, gh.ErrRateLimited) {
+			slog.Warn("rate limited while fetching monitored PRs", "error", err)
+		} else {
+			slog.Error("failed to fetch monitored PRs", "error", err)
+		}
+		return
+	}
+
+	for i, pr := range prs {
+		if o.state.IsPRBeingFixed(pr.Number) {
+			continue
+		}
+
+		checkRuns, err := o.github.FetchCheckRuns(ctx, pr.Repo, pr.HeadSHA)
+		if err != nil {
+			slog.Warn("failed to fetch check runs for PR", "pr", pr.Identifier(), "error", err)
+			continue
+		}
+		prs[i].CheckRuns = checkRuns
+
+		// Only act on PRs where all checks have completed.
+		if !prs[i].ChecksComplete() {
+			continue
+		}
+
+		if !prs[i].HasFailedChecks() {
+			slog.Debug("PR checks all passing", "pr", pr.Identifier())
+			continue
+		}
+
+		failed := prs[i].FailedCheckRuns()
+		slog.Info("PR has failed checks, queuing fix",
+			"pr", pr.Identifier(),
+			"failed_checks", len(failed),
+		)
+
+		// Fetch failure logs for each failed check.
+		for j := range failed {
+			logOutput, err := o.github.FetchCheckRunLog(ctx, pr.Repo, failed[j].ID)
+			if err != nil {
+				slog.Warn("failed to fetch check run log", "check", failed[j].Name, "error", err)
+				continue
+			}
+			if len(logOutput) > o.cfg.PRMonitoring.LogTruncateLen {
+				logOutput = logOutput[:o.cfg.PRMonitoring.LogTruncateLen] + "\n... (truncated)"
+			}
+			failed[j].Output = logOutput
+		}
+
+		prCopy := prs[i]
+		prCopy.CheckRuns = failed
+		o.state.AddPRFix(pr.Number, &domain.PRFixEntry{
+			PR:          prCopy,
+			Attempt:     1,
+			MaxAttempts: o.cfg.PRMonitoring.MaxFixAttempts,
+			NextRetryAt: time.Now(),
+		})
+	}
+
+	// Dispatch due PR fixes.
+	for _, fix := range o.state.AllPRFixes() {
+		if time.Now().Before(fix.NextRetryAt) {
+			continue
+		}
+		if !o.state.SlotsAvailable(o.cfg.Polling.MaxConcurrentAgents) {
+			break
+		}
+		o.state.RemovePRFix(fix.PR.Number)
+		o.dispatchPRFix(ctx, fix)
+	}
+}
+
+// dispatchPRFix dispatches an agent to fix a PR with failing CI checks.
+func (o *Orchestrator) dispatchPRFix(ctx context.Context, fix *domain.PRFixEntry) {
+	log := slog.With("pr", fix.PR.Identifier(), "attempt", fix.Attempt)
+
+	// Create a synthetic issue to reuse workspace infrastructure.
+	syntheticIssue := domain.Issue{
+		ID:    fix.PR.Number + 1000000, // Offset to avoid collision with real issues
+		Repo:  fix.PR.Repo,
+		Title: fmt.Sprintf("PR Fix: %s", fix.PR.Title),
+		URL:   fix.PR.URL,
+	}
+
+	wsPath, err := o.workspace.Ensure(ctx, syntheticIssue)
+	if err != nil {
+		log.Error("workspace ensure failed for PR fix", "error", err)
+		return
+	}
+
+	if err := o.workspace.RunHook(ctx, "before_run", wsPath, syntheticIssue); err != nil {
+		log.Error("before_run hook failed for PR fix", "error", err)
+		return
+	}
+
+	skillText := skills.InjectSkills(o.skills, o.cfg.Skills.Required, o.cfg.Skills.Optional)
+	rendered, err := prompt.RenderPRFix(fix.PR, fix.PR.FailedCheckRuns(), fix.Attempt, skillText)
+	if err != nil {
+		log.Error("PR fix prompt render failed", "error", err)
+		return
+	}
+
+	// Use the default agent runner.
+	runner := o.agents[o.cfg.Agent.Command]
+	if runner == nil {
+		for _, r := range o.agents {
+			runner = r
+			break
+		}
+	}
+	if runner == nil {
+		log.Error("no agent runner available for PR fix")
+		return
+	}
+
+	opts := agent.AgentOpts{
+		Model:            o.cfg.Agent.Model,
+		MaxContinuations: o.cfg.Agent.MaxAutopilotContinues,
+	}
+	sess, err := runner.Start(ctx, wsPath, rendered, opts)
+	if err != nil {
+		log.Error("agent start failed for PR fix", "error", err)
+		return
+	}
+
+	o.sessionsMu.Lock()
+	o.prSessions[fix.PR.Number] = sess
+	o.sessionsMu.Unlock()
+	o.metrics.Increment("pr_fixes_dispatched")
+
+	now := time.Now()
+	entry := &domain.RunEntry{
+		Issue:       syntheticIssue,
+		SessionID:   sess.ID,
+		ProcessPID:  sess.PID,
+		StartedAt:   now,
+		LastEventAt: now,
+		Attempt:     fix.Attempt,
+	}
+	o.state.AddPRRunning(fix.PR.Number, entry)
+
+	log.Info("PR fix agent dispatched",
+		"session_id", sess.ID,
+		"pid", sess.PID,
+		"workspace", wsPath,
+	)
+
+	go o.monitorPRFixAgent(fix, sess, entry)
+}
+
+// monitorPRFixAgent monitors a PR fix agent session until completion.
+func (o *Orchestrator) monitorPRFixAgent(fix *domain.PRFixEntry, sess *agent.Session, entry *domain.RunEntry) {
+	<-sess.Done
+
+	log := slog.With("pr", fix.PR.Identifier(), "session_id", sess.ID)
+
+	o.state.RemovePRRunning(fix.PR.Number)
+	o.sessionsMu.Lock()
+	delete(o.prSessions, fix.PR.Number)
+	o.sessionsMu.Unlock()
+
+	finishedAt := time.Now()
+	completedErrMsg := ""
+	if sess.ExitErr != nil {
+		completedErrMsg = sess.ExitErr.Error()
+	}
+	duration := finishedAt.Sub(entry.StartedAt)
+	o.state.AddPRHistory(fix.PR.Number, domain.CompletedRun{
+		SessionID:  sess.ID,
+		Attempt:    fix.Attempt,
+		StartedAt:  entry.StartedAt,
+		FinishedAt: finishedAt,
+		Duration:   duration,
+		ExitCode:   sess.ExitCode,
+		Error:      completedErrMsg,
+		Tokens:     entry.Tokens,
+	})
+
+	if sess.ExitCode == 0 {
+		log.Info("PR fix agent completed successfully")
+		o.metrics.Increment("pr_fixes_completed")
+		// Comment on the PR about the fix.
+		comment := fmt.Sprintf("Gopilot pushed a fix for failing CI checks (attempt %d).", fix.Attempt)
+		if err := o.github.AddComment(context.Background(), fix.PR.Repo, fix.PR.Number, comment); err != nil {
+			log.Warn("failed to comment on PR after fix", "error", err)
+		}
+	} else {
+		log.Warn("PR fix agent exited with error", "exit_code", sess.ExitCode, "error", sess.ExitErr)
+
+		errMsg := "exit code " + strconv.Itoa(sess.ExitCode)
+		if sess.ExitErr != nil {
+			errMsg = sess.ExitErr.Error()
+		}
+
+		if fix.Attempt < fix.MaxAttempts {
+			// Re-queue with backoff.
+			maxBackoff := time.Duration(o.cfg.Agent.MaxRetryBackoffMS) * time.Millisecond
+			backoff := time.Duration(fix.Attempt) * maxBackoff / time.Duration(fix.MaxAttempts)
+			nextFix := &domain.PRFixEntry{
+				PR:          fix.PR,
+				Attempt:     fix.Attempt + 1,
+				MaxAttempts: fix.MaxAttempts,
+				NextRetryAt: time.Now().Add(backoff),
+				LastError:   errMsg,
+			}
+			o.state.AddPRFix(fix.PR.Number, nextFix)
+			log.Info("PR fix scheduled for retry", "next_attempt", fix.Attempt+1)
+		} else {
+			log.Error("PR fix max attempts exceeded", "attempts", fix.MaxAttempts)
+			o.metrics.Increment("pr_fixes_failed")
+			comment := fmt.Sprintf("Gopilot failed to fix CI checks after %d attempts. Last error: %s\n\nThis PR needs manual attention.", fix.MaxAttempts, errMsg)
+			if err := o.github.AddComment(context.Background(), fix.PR.Repo, fix.PR.Number, comment); err != nil {
+				log.Warn("failed to comment on PR after max retries", "error", err)
+			}
+			if err := o.github.AddLabel(context.Background(), fix.PR.Repo, fix.PR.Number, "needs-human"); err != nil {
+				log.Warn("failed to add needs-human label to PR", "error", err)
+			}
+		}
 	}
 }

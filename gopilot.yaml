@@ -55,6 +55,14 @@ dashboard:
   addr: ":3000"
   external_url: "http://10.0.1.58:3000"
 
+# PR monitoring — watch for failed CI checks and dispatch agents to fix them
+pr_monitoring:
+  enabled: true
+  poll_interval_ms: 300000    # 5 minutes
+  label: "gopilot"            # Only monitor PRs with this label
+  max_fix_attempts: 2         # Max attempts before adding needs-human label
+  log_truncate_len: 2000      # Max chars of failure log to include in prompt
+
 # Planning configuration (optional)
 # planning:
 #   label: "gopilot:plan"           # Label that triggers planning mode
@@ -90,4 +98,6 @@ prompt: |
   - NEVER push directly to main
   - ALWAYS write tests before implementation
   - ALWAYS run the full test suite before opening a PR
+  - When creating a PR, ALWAYS add the "gopilot" label so CI is monitored
+  - Include "Closes #{{ .Issue.ID }}" in the PR body to link it to this issue
   - If stuck, add a comment asking for clarification and stop
