@@ -146,7 +146,7 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 func (o *Orchestrator) DryRun(ctx context.Context) error {
 	issues, err := o.github.FetchCandidateIssues(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("dry run: fetch candidates: %w", err)
 	}
 	domain.SortByPriority(issues)
 

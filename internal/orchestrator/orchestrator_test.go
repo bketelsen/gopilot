@@ -3,6 +3,7 @@ package orchestrator
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -77,6 +78,40 @@ func (m *mockAgent) Start(ctx context.Context, workspace string, prompt string, 
 func (m *mockAgent) Stop(sess *agent.Session) error {
 	sess.Cancel()
 	return nil
+}
+
+// mockGitHubError always returns errors for testing error wrapping.
+type mockGitHubError struct{ mockGitHub }
+
+func (m *mockGitHubError) FetchCandidateIssues(ctx context.Context) ([]domain.Issue, error) {
+	return nil, fmt.Errorf("connection refused")
+}
+
+func TestDryRunWrapsError(t *testing.T) {
+	cfg := &config.Config{
+		GitHub: config.GitHubConfig{
+			Token: "tok", Repos: []string{"o/r"}, EligibleLabels: []string{"gopilot"},
+		},
+		Polling: config.PollingConfig{IntervalMS: 1000, MaxConcurrentAgents: 1},
+		Agent: config.AgentConfig{
+			Command: "mock", TurnTimeoutMS: 60000, StallTimeoutMS: 60000,
+			MaxRetries: 1, MaxRetryBackoffMS: 1000, MaxAutopilotContinues: 5,
+		},
+		Workspace: config.WorkspaceConfig{Root: t.TempDir(), HookTimeoutMS: 5000},
+		Prompt:    "Work",
+	}
+
+	gh := &mockGitHubError{}
+	orch := NewOrchestrator(cfg, gh, map[string]agent.Runner{"mock": &mockAgent{}})
+
+	err := orch.DryRun(context.Background())
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	want := "dry run: fetch candidates"
+	if !strings.Contains(err.Error(), want) {
+		t.Errorf("error = %q, want to contain %q", err.Error(), want)
+	}
 }
 
 func TestOrchestratorDispatch(t *testing.T) {

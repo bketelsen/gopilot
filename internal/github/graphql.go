@@ -99,7 +99,7 @@ func (c *GraphQLClient) DiscoverProjectFields(ctx context.Context) (*ProjectMeta
 
 	result, err := c.execute(ctx, query, nil)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("discover project fields: %w", err)
 	}
 
 	// Navigate to the projectV2 node regardless of owner type
@@ -183,7 +183,10 @@ func (c *GraphQLClient) SetProjectStatus(ctx context.Context, itemID string, sta
 	}
 
 	_, err := c.execute(ctx, mutation, vars)
-	return err
+	if err != nil {
+		return fmt.Errorf("set project status %q on item %s: %w", status, itemID, err)
+	}
+	return nil
 }
 
 // EnrichIssues enriches issues with Projects v2 data (priority, iteration, etc.).
@@ -203,25 +206,25 @@ func (c *GraphQLClient) execute(ctx context.Context, query string, variables map
 
 	jsonBody, err := json.Marshal(body)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("graphql marshal request: %w", err)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, "POST", c.endpoint, bytes.NewReader(jsonBody))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("graphql create request: %w", err)
 	}
 	req.Header.Set("Authorization", "token "+c.cfg.Token)
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("graphql execute: %w", err)
 	}
 	defer resp.Body.Close()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("graphql read response: %w", err)
 	}
 
 	if resp.StatusCode != http.StatusOK {
@@ -230,11 +233,11 @@ func (c *GraphQLClient) execute(ctx context.Context, query string, variables map
 
 	var result map[string]any
 	if err := json.Unmarshal(respBody, &result); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("graphql unmarshal response: %w", err)
 	}
 
 	if errs, ok := result["errors"]; ok {
-		return nil, fmt.Errorf("GraphQL errors: %v", errs)
+		return nil, fmt.Errorf("GraphQL errors: %w", fmt.Errorf("%v", errs))
 	}
 
 	return result, nil
