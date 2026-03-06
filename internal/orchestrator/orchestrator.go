@@ -561,6 +561,20 @@ func (o *Orchestrator) reconcile(ctx context.Context) {
 			continue
 		}
 
+		// Check for linked PRs — if an open PR exists, stop the agent and mark completed
+		prs, err := o.github.FetchLinkedPullRequests(ctx, entry.Issue.Repo, entry.Issue.ID)
+		if err != nil {
+			slog.Warn("reconcile: failed to fetch linked PRs", "issue", entry.Issue.Identifier(), "error", err)
+		} else {
+			entry.Issue.LinkedPRs = prs
+			if entry.Issue.HasOpenPR() {
+				slog.Info("reconcile: issue has open PR, stopping agent", "issue", entry.Issue.Identifier())
+				o.stopAndCleanup(ctx, entry, true)
+				o.state.MarkCompleted(entry.Issue.ID)
+				continue
+			}
+		}
+
 		entry.Issue = *issue
 	}
 }
