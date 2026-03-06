@@ -181,13 +181,9 @@ func (o *Orchestrator) Tick(ctx context.Context) {
 			continue
 		}
 		o.state.Release(issue.ID) // Release claim so dispatch can re-claim
-		// Route planning issues back through the planning path, not coding.
+		// Planning issues use the dashboard now; skip retry dispatch.
 		if o.state.IsPlanning(issue.ID) {
-			entry := o.state.GetPlanning(issue.ID)
-			if entry != nil {
-				o.dispatchPlanningAgent(ctx, *issue, entry)
-				continue
-			}
+			continue
 		}
 		o.dispatch(ctx, *issue, retry.Attempt)
 	}

@@ -2,6 +2,7 @@ package orchestrator
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -30,36 +31,6 @@ func TestPartitionPlanningIssues(t *testing.T) {
 	}
 }
 
-func TestHasNewHumanComment(t *testing.T) {
-	client := &stubCommentClient{
-		comments: []domain.Comment{
-			{ID: 100, Author: "gopilot[bot]", Body: "What is the goal?", CreatedAt: time.Now().Add(-time.Minute)},
-			{ID: 101, Author: "user", Body: "Build a feature", CreatedAt: time.Now()},
-		},
-	}
-
-	hasNew, lastID := hasNewHumanComment(client, context.Background(), "o/r", 1, 100)
-	if !hasNew {
-		t.Error("hasNew = false, want true")
-	}
-	if lastID != 101 {
-		t.Errorf("lastID = %d, want 101", lastID)
-	}
-}
-
-func TestHasNewHumanCommentBotOnly(t *testing.T) {
-	client := &stubCommentClient{
-		comments: []domain.Comment{
-			{ID: 100, Author: "gopilot[bot]", Body: "What is the goal?", CreatedAt: time.Now()},
-		},
-	}
-
-	hasNew, _ := hasNewHumanComment(client, context.Background(), "o/r", 1, 100)
-	if hasNew {
-		t.Error("hasNew = true, want false (only bot comment)")
-	}
-}
-
 func TestIsBotComment(t *testing.T) {
 	if !isBotComment(domain.Comment{Author: "gopilot[bot]", Body: "hello"}) {
 		t.Error("gopilot[bot] should be a bot")
@@ -77,57 +48,26 @@ func TestIsBotComment(t *testing.T) {
 	}
 }
 
-func TestHasNewHumanCommentIgnoresMarkedComments(t *testing.T) {
-	client := &stubCommentClient{
-		comments: []domain.Comment{
-			{ID: 100, Author: "gopilot[bot]", Body: "What is the goal?", CreatedAt: time.Now().Add(-time.Minute)},
-			{ID: 101, Author: "bketelsen", Body: "Agent response\n" + PlanningCommentMarker, CreatedAt: time.Now()},
-		},
-	}
-
-	hasNew, lastID := hasNewHumanComment(client, context.Background(), "o/r", 1, 100)
-	if hasNew {
-		t.Error("hasNew = true, want false (comment has planning marker)")
-	}
-	if lastID != 101 {
-		t.Errorf("lastID = %d, want 101", lastID)
-	}
-
-	// But a real human comment from the same user IS detected
-	client.comments = append(client.comments, domain.Comment{
-		ID: 102, Author: "bketelsen", Body: "please use Google OAuth", CreatedAt: time.Now(),
-	})
-
-	hasNew, lastID = hasNewHumanComment(client, context.Background(), "o/r", 1, 101)
-	if !hasNew {
-		t.Error("hasNew = false, want true (real human comment)")
-	}
-	if lastID != 102 {
-		t.Errorf("lastID = %d, want 102", lastID)
-	}
-}
-
-// stubCommentClient implements just FetchIssueComments for testing.
-type stubCommentClient struct {
-	comments []domain.Comment
-}
-
-func (s *stubCommentClient) FetchIssueComments(ctx context.Context, repo string, id int) ([]domain.Comment, error) {
-	return s.comments, nil
-}
-
-// mockPlanningGitHub extends mockGitHub with comment tracking.
-type mockPlanningGitHub struct {
+// commentCapturingGitHub wraps mockGitHub to capture AddComment calls.
+type commentCapturingGitHub struct {
 	mockGitHub
-	comments map[int][]domain.Comment
+	addedComments []capturedComment
 }
 
-func (m *mockPlanningGitHub) FetchIssueComments(ctx context.Context, repo string, id int) ([]domain.Comment, error) {
-	return m.comments[id], nil
+type capturedComment struct {
+	Repo string
+	ID   int
+	Body string
 }
 
-func TestOrchestratorPartitionsPlanningIssues(t *testing.T) {
-	cfg := &config.Config{
+func (m *commentCapturingGitHub) AddComment(ctx context.Context, repo string, id int, body string) error {
+	m.addedComments = append(m.addedComments, capturedComment{Repo: repo, ID: id, Body: body})
+	return nil
+}
+
+func newTestConfig(t *testing.T) *config.Config {
+	t.Helper()
+	return &config.Config{
 		GitHub: config.GitHubConfig{
 			Token: "tok", Repos: []string{"o/r"}, EligibleLabels: []string{"gopilot"},
 		},
@@ -139,19 +79,135 @@ func TestOrchestratorPartitionsPlanningIssues(t *testing.T) {
 		Workspace: config.WorkspaceConfig{Root: t.TempDir(), HookTimeoutMS: 5000},
 		Planning: config.PlanningConfig{
 			Label: "gopilot:plan", CompletedLabel: "gopilot:planned",
-			ApproveCommand: "/approve", MaxQuestions: 10, Agent: "mock",
+			ApproveCommand: "/approve", MaxQuestions: 10,
 		},
-		Prompt: "Work",
+		Dashboard: config.DashboardConfig{Addr: ":4000"},
+		Prompt:    "Work",
+	}
+}
+
+func TestProcessPlanningIssuesPostsRedirect(t *testing.T) {
+	cfg := newTestConfig(t)
+
+	planningIssue := domain.Issue{
+		ID: 1, Repo: "o/r", Title: "Plan: Auth system",
+		Labels: []string{"gopilot", "gopilot:plan"}, Status: "Todo",
+		Body: "We need auth", CreatedAt: time.Now(),
 	}
 
-	gh := &mockPlanningGitHub{
+	gh := &commentCapturingGitHub{
+		mockGitHub: mockGitHub{issues: []domain.Issue{planningIssue}},
+	}
+	ag := &mockAgent{}
+	orch := NewOrchestrator(cfg, gh, map[string]agent.Runner{"mock": ag})
+
+	ctx := context.Background()
+	orch.processPlanningIssues(ctx, []domain.Issue{planningIssue})
+
+	// Should have posted exactly one comment.
+	if len(gh.addedComments) != 1 {
+		t.Fatalf("addedComments = %d, want 1", len(gh.addedComments))
+	}
+
+	comment := gh.addedComments[0]
+	if comment.Repo != "o/r" {
+		t.Errorf("comment repo = %q, want %q", comment.Repo, "o/r")
+	}
+	if comment.ID != 1 {
+		t.Errorf("comment ID = %d, want 1", comment.ID)
+	}
+	if !strings.Contains(comment.Body, "http://localhost:4000/planning/new") {
+		t.Errorf("comment body missing dashboard URL: %s", comment.Body)
+	}
+	if !strings.Contains(comment.Body, PlanningCommentMarker) {
+		t.Errorf("comment body missing planning marker")
+	}
+
+	// Issue should be in planning state with PlanningPhaseComplete.
+	if !orch.state.IsPlanning(1) {
+		t.Error("issue 1 should be in planning state")
+	}
+	entry := orch.state.GetPlanning(1)
+	if entry == nil {
+		t.Fatal("planning entry is nil")
+	}
+	if entry.Phase != PlanningPhaseComplete {
+		t.Errorf("phase = %q, want %q", entry.Phase, PlanningPhaseComplete)
+	}
+
+	// No agents should have been started.
+	if ag.started != 0 {
+		t.Errorf("agents started = %d, want 0", ag.started)
+	}
+}
+
+func TestProcessPlanningIssuesSkipsAlreadyRedirected(t *testing.T) {
+	cfg := newTestConfig(t)
+
+	planningIssue := domain.Issue{
+		ID: 1, Repo: "o/r", Title: "Plan: Auth system",
+		Labels: []string{"gopilot", "gopilot:plan"}, Status: "Todo",
+		Body: "We need auth", CreatedAt: time.Now(),
+	}
+
+	gh := &commentCapturingGitHub{
+		mockGitHub: mockGitHub{issues: []domain.Issue{planningIssue}},
+	}
+	ag := &mockAgent{}
+	orch := NewOrchestrator(cfg, gh, map[string]agent.Runner{"mock": ag})
+
+	// Pre-populate planning state to simulate already-redirected issue.
+	orch.state.AddPlanning(1, &PlanningEntry{
+		IssueID: 1,
+		Repo:    "o/r",
+		Phase:   PlanningPhaseComplete,
+	})
+
+	ctx := context.Background()
+	orch.processPlanningIssues(ctx, []domain.Issue{planningIssue})
+
+	// Should NOT have posted any comments.
+	if len(gh.addedComments) != 0 {
+		t.Errorf("addedComments = %d, want 0 (already redirected)", len(gh.addedComments))
+	}
+}
+
+func TestProcessPlanningIssuesDefaultAddr(t *testing.T) {
+	cfg := newTestConfig(t)
+	cfg.Dashboard.Addr = "" // empty — should default to :3000
+
+	planningIssue := domain.Issue{
+		ID: 5, Repo: "o/r", Title: "Plan: something",
+		Labels: []string{"gopilot", "gopilot:plan"}, Status: "Todo",
+		CreatedAt: time.Now(),
+	}
+
+	gh := &commentCapturingGitHub{
+		mockGitHub: mockGitHub{issues: []domain.Issue{planningIssue}},
+	}
+	orch := NewOrchestrator(cfg, gh, map[string]agent.Runner{"mock": &mockAgent{}})
+
+	orch.processPlanningIssues(context.Background(), []domain.Issue{planningIssue})
+
+	if len(gh.addedComments) != 1 {
+		t.Fatalf("addedComments = %d, want 1", len(gh.addedComments))
+	}
+	if !strings.Contains(gh.addedComments[0].Body, "http://localhost:3000/planning/new") {
+		t.Errorf("expected default :3000 addr in comment body: %s", gh.addedComments[0].Body)
+	}
+}
+
+func TestOrchestratorPartitionsPlanningIssues(t *testing.T) {
+	cfg := newTestConfig(t)
+	cfg.Planning.Agent = "mock"
+
+	gh := &commentCapturingGitHub{
 		mockGitHub: mockGitHub{
 			issues: []domain.Issue{
 				{ID: 1, Repo: "o/r", Labels: []string{"gopilot", "gopilot:plan"}, Status: "Todo", Priority: 1, CreatedAt: time.Now()},
 				{ID: 2, Repo: "o/r", Labels: []string{"gopilot"}, Status: "Todo", Priority: 1, CreatedAt: time.Now()},
 			},
 		},
-		comments: map[int][]domain.Comment{},
 	}
 	ag := &mockAgent{}
 	orch := NewOrchestrator(cfg, gh, map[string]agent.Runner{"mock": ag})
@@ -159,144 +215,27 @@ func TestOrchestratorPartitionsPlanningIssues(t *testing.T) {
 	ctx := context.Background()
 	orch.Tick(ctx)
 
-	// Issue 1 should be in planning state
+	// Issue 1 should be in planning state (redirect posted).
 	if !orch.state.IsPlanning(1) {
 		t.Error("issue 1 should be in planning state")
 	}
 
-	// Wait for mock agents to register
+	// A redirect comment should have been posted for issue 1.
+	foundRedirect := false
+	for _, c := range gh.addedComments {
+		if c.ID == 1 && strings.Contains(c.Body, PlanningCommentMarker) {
+			foundRedirect = true
+		}
+	}
+	if !foundRedirect {
+		t.Error("expected redirect comment for planning issue 1")
+	}
+
+	// Wait for mock agent to register (coding issue 2).
 	time.Sleep(50 * time.Millisecond)
 
-	// Both should have been dispatched (1 as planning, 2 as coding)
-	if ag.started < 2 {
-		t.Errorf("agents started = %d, want >= 2", ag.started)
-	}
-}
-
-// mockSuccessAgent completes immediately with exit code 0.
-type mockSuccessAgent struct {
-	started int
-}
-
-func (m *mockSuccessAgent) Name() string { return "mock-success" }
-func (m *mockSuccessAgent) Start(ctx context.Context, workspace string, prompt string, opts agent.AgentOpts) (*agent.Session, error) {
-	m.started++
-	done := make(chan struct{})
-	close(done) // completes immediately
-	return &agent.Session{
-		ID: "success-session", PID: 11111, Done: done,
-		ExitCode: 0,
-		Cancel:   func() {},
-	}, nil
-}
-func (m *mockSuccessAgent) Stop(sess *agent.Session) error { return nil }
-
-func TestPlanningIssueNotMarkedCompleted(t *testing.T) {
-	cfg := &config.Config{
-		GitHub: config.GitHubConfig{
-			Token: "tok", Repos: []string{"o/r"}, EligibleLabels: []string{"gopilot"},
-		},
-		Polling: config.PollingConfig{IntervalMS: 1000, MaxConcurrentAgents: 5},
-		Agent: config.AgentConfig{
-			Command: "mock-success", TurnTimeoutMS: 60000, StallTimeoutMS: 60000,
-			MaxRetries: 3, MaxRetryBackoffMS: 1000, MaxAutopilotContinues: 5,
-		},
-		Workspace: config.WorkspaceConfig{Root: t.TempDir(), HookTimeoutMS: 5000},
-		Planning: config.PlanningConfig{
-			Label: "gopilot:plan", CompletedLabel: "gopilot:planned",
-			ApproveCommand: "/approve", MaxQuestions: 10, Agent: "mock-success",
-		},
-		Prompt: "Work",
-	}
-
-	planningIssue := domain.Issue{
-		ID: 1, Repo: "o/r", Title: "Plan: Auth system",
-		Labels: []string{"gopilot", "gopilot:plan"}, Status: "Todo",
-		Body: "We need auth", CreatedAt: time.Now(),
-	}
-
-	gh := &mockPlanningGitHub{
-		mockGitHub: mockGitHub{issues: []domain.Issue{planningIssue}},
-		comments:   map[int][]domain.Comment{},
-	}
-	ag := &mockSuccessAgent{}
-	orch := NewOrchestrator(cfg, gh, map[string]agent.Runner{"mock-success": ag})
-
-	ctx := context.Background()
-	orch.Tick(ctx)
-
-	// Wait for agent to complete (it closes Done immediately)
-	time.Sleep(100 * time.Millisecond)
-
-	// Planning issue must NOT be marked completed
-	if orch.state.IsCompleted(1) {
-		t.Error("planning issue should NOT be marked completed after agent exits")
-	}
-
-	// Planning issue must NOT be claimed (released)
-	if orch.state.IsClaimed(1) {
-		t.Error("planning issue should be released after agent exits")
-	}
-
-	// Planning entry must still exist
-	if !orch.state.IsPlanning(1) {
-		t.Error("planning entry should still exist after agent exits")
-	}
-}
-
-func TestPlanningFullLifecycle(t *testing.T) {
-	cfg := &config.Config{
-		GitHub: config.GitHubConfig{
-			Token: "tok", Repos: []string{"o/r"}, EligibleLabels: []string{"gopilot"},
-		},
-		Polling: config.PollingConfig{IntervalMS: 1000, MaxConcurrentAgents: 5},
-		Agent: config.AgentConfig{
-			Command: "mock", TurnTimeoutMS: 60000, StallTimeoutMS: 60000,
-			MaxRetries: 3, MaxRetryBackoffMS: 1000, MaxAutopilotContinues: 5,
-		},
-		Workspace: config.WorkspaceConfig{Root: t.TempDir(), HookTimeoutMS: 5000},
-		Planning: config.PlanningConfig{
-			Label: "gopilot:plan", CompletedLabel: "gopilot:planned",
-			ApproveCommand: "/approve", MaxQuestions: 10, Agent: "mock",
-		},
-		Prompt: "Work",
-	}
-
-	planningIssue := domain.Issue{
-		ID: 1, Repo: "o/r", Title: "Plan: Auth system",
-		Labels: []string{"gopilot", "gopilot:plan"}, Status: "Todo",
-		Body: "We need auth", CreatedAt: time.Now(),
-	}
-	codingIssue := domain.Issue{
-		ID: 2, Repo: "o/r", Title: "Fix bug",
-		Labels: []string{"gopilot"}, Status: "Todo",
-		CreatedAt: time.Now(),
-	}
-
-	gh := &mockPlanningGitHub{
-		mockGitHub: mockGitHub{issues: []domain.Issue{planningIssue, codingIssue}},
-		comments:   map[int][]domain.Comment{},
-	}
-	ag := &mockAgent{}
-	orch := NewOrchestrator(cfg, gh, map[string]agent.Runner{"mock": ag})
-
-	ctx := context.Background()
-	orch.Tick(ctx)
-
-	if !orch.state.IsPlanning(1) {
-		t.Fatal("issue 1 should be in planning state after tick 1")
-	}
-
-	time.Sleep(100 * time.Millisecond)
-
-	entry := orch.state.GetPlanning(1)
-	if entry == nil {
-		t.Fatal("planning entry is nil")
-	}
-	if entry.Phase != PlanningPhaseAwaitingReply {
-		t.Errorf("phase = %q, want %q", entry.Phase, PlanningPhaseAwaitingReply)
-	}
-	if entry.QuestionsAsked != 1 {
-		t.Errorf("questions asked = %d, want 1", entry.QuestionsAsked)
+	// Only coding issue 2 should have been dispatched to an agent.
+	if ag.started != 1 {
+		t.Errorf("agents started = %d, want 1 (only coding issue)", ag.started)
 	}
 }
