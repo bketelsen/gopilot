@@ -177,7 +177,12 @@ templ PlanningChat(session *planning.Session) {
 										}
 										break;
 									case 'tool_use':
-										appendToolUse(block);
+										if (block.name === 'AskUserQuestion' && block.input && block.input.question) {
+											agentBuf += block.input.question + '\n';
+											document.getElementById('agent-streaming-content').textContent = agentBuf;
+										} else {
+											appendToolUse(block);
+										}
 										break;
 									case 'thinking':
 										appendThinking(block);
