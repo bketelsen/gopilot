@@ -7,6 +7,7 @@
 | `gopilot`          | Start the orchestrator (default mode)      |
 | `gopilot version`  | Print the version string                   |
 | `gopilot init`     | Create a default `gopilot.yaml` in the current directory (fails if the file already exists) |
+| `gopilot setup`    | Ensure required labels exist on all configured repositories (idempotent) |
 
 ## Flags
 
@@ -40,6 +41,12 @@ gopilot --log /var/log/gopilot.log
 
 # Combine flags
 gopilot --config prod.yaml --debug --port 8080 --log gopilot.log
+
+# Create labels on all configured repos
+gopilot setup
+
+# Use a custom config path
+gopilot setup /etc/gopilot/production.yaml
 ```
 
 ## Exit Codes
