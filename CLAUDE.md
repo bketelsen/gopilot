@@ -52,7 +52,7 @@ Build order matters: `generate` must run before `css`, both before `build`.
 - **Go 1.25** with `go tool` for templ
 - **chi/v5** HTTP router for web dashboard
 - **templ** (`.templ` files) for type-safe UI components → generates `*_templ.go` files
-- **Tailwind CSS v4** + tailwind-merge-go for styling
+- **Tailwind CSS v4** for styling
 - **HTMX** for interactive UI updates
 - **SSE** (Server-Sent Events) for real-time dashboard updates
 - **Go text/template** for prompt rendering with skill injection
@@ -72,7 +72,6 @@ Build order matters: `generate` must run before `css`, both before `build`.
 | `internal/metrics/` | Token tracking and cost estimation |
 | `internal/config/` | YAML config structs, loader, fsnotify watcher |
 | `internal/domain/` | Core types: Issue, RunEntry, CompletedRun, AgentEvent |
-| `components/` | Reusable templ UI components (button, card, dialog, etc.) |
 | `skills/` | Runtime skill definitions (SKILL.md files) |
 
 ## Testing Patterns
