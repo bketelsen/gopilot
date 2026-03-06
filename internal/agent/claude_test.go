@@ -29,12 +29,12 @@ func TestClaudeBuildArgsReadOnly(t *testing.T) {
 	if !strings.Contains(joined, "--dangerously-skip-permissions") {
 		t.Error("read-only should still have --dangerously-skip-permissions")
 	}
-	if !strings.Contains(joined, "--disallowedTools") {
-		t.Error("read-only should have --disallowedTools")
+	if !strings.Contains(joined, "--allowedTools") {
+		t.Error("read-only should have --allowedTools")
 	}
-	for _, tool := range []string{"Write", "Edit", "Bash", "EnterPlanMode"} {
+	for _, tool := range []string{"Read", "Glob", "Grep"} {
 		if !strings.Contains(joined, tool) {
-			t.Errorf("read-only should disallow %s", tool)
+			t.Errorf("read-only should allow %s", tool)
 		}
 	}
 }

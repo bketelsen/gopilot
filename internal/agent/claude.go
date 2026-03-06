@@ -100,7 +100,7 @@ func (r *ClaudeRunner) buildArgs(promptPath string, opts AgentOpts) []string {
 	}
 	args = append(args, "--dangerously-skip-permissions")
 	if opts.ReadOnly {
-		args = append(args, "--disallowedTools", "Write,Edit,NotebookEdit,Bash,EnterPlanMode,ExitPlanMode,EnterWorktree")
+		args = append(args, "--allowedTools", "Read,Glob,Grep,WebFetch,WebSearch")
 	}
 	return args
 }
