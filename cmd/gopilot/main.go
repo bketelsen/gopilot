@@ -14,6 +14,7 @@ import (
 	ghclient "github.com/bketelsen/gopilot/internal/github"
 	"github.com/bketelsen/gopilot/internal/logging"
 	"github.com/bketelsen/gopilot/internal/orchestrator"
+	"github.com/bketelsen/gopilot/internal/setup"
 )
 
 var Version = "dev"
@@ -26,6 +27,9 @@ func main() {
 			return
 		case "init":
 			runInit()
+			return
+		case "setup":
+			runSetup()
 			return
 		}
 	}
@@ -121,6 +125,28 @@ func main() {
 	}
 }
 
+func runSetup() {
+	configPath := "gopilot.yaml"
+	if len(os.Args) > 2 {
+		configPath = os.Args[2]
+	}
+
+	cfg, err := config.Load(configPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to load config: %v\n", err)
+		os.Exit(1)
+	}
+
+	client := ghclient.NewRESTClient(cfg.GitHub, "https://api.github.com/")
+	results, err := setup.EnsureLabels(context.Background(), cfg, client)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "setup failed: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Print(setup.FormatResults(results))
+}
+
 func runInit() {
 	path := "gopilot.yaml"
 	if _, err := os.Stat(path); err == nil {
@@ -131,5 +157,5 @@ func runInit() {
 		fmt.Fprintf(os.Stderr, "failed to write %s: %v\n", path, err)
 		os.Exit(1)
 	}
-	fmt.Printf("Created %s — edit it with your GitHub token and repos.\n", path)
+	fmt.Printf("Created %s — edit it with your GitHub token and repos, then run `gopilot setup` to create labels.\n", path)
 }
