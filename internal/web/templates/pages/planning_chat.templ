@@ -56,6 +56,7 @@ templ PlanningChat(session *planning.Session) {
 			const sendBtn = document.getElementById('send-btn');
 			const statusBadge = document.getElementById('status-badge');
 			let agentBuf = '';
+			const toolResultMap = new Map();
 
 			sendBtn.disabled = true;
 			input.disabled = true;
@@ -92,6 +93,9 @@ templ PlanningChat(session *planning.Session) {
 							hasPlan = true;
 							document.getElementById('export-buttons').classList.remove('hidden');
 						}
+						break;
+					case 'agent_event':
+						handleAgentEvent(JSON.parse(msg.content));
 						break;
 					case 'status':
 						statusBadge.textContent = msg.status;
@@ -155,6 +159,144 @@ templ PlanningChat(session *planning.Session) {
 				const div = document.createElement('div');
 				div.textContent = s;
 				return div.innerHTML;
+			}
+
+			function handleAgentEvent(evt) {
+				ensureAgentStreamingDiv();
+				switch (evt.type) {
+					case 'assistant':
+						if (evt.content_blocks) {
+							evt.content_blocks.forEach(function(block) {
+								switch (block.type) {
+									case 'text':
+										agentBuf += (block.text || '') + '\n';
+										document.getElementById('agent-streaming-content').textContent = agentBuf;
+										if (!hasPlan && agentBuf.includes('## Plan:')) {
+											hasPlan = true;
+											document.getElementById('export-buttons').classList.remove('hidden');
+										}
+										break;
+									case 'tool_use':
+										appendToolUse(block);
+										break;
+									case 'thinking':
+										appendThinking(block);
+										break;
+								}
+							});
+						}
+						break;
+					case 'tool_result':
+						fillToolResult(evt);
+						break;
+					case 'result':
+						appendResultSummary(evt);
+						break;
+				}
+				messages.scrollTop = messages.scrollHeight;
+			}
+
+			function ensureAgentStreamingDiv() {
+				if (!document.getElementById('agent-streaming')) {
+					var div = document.createElement('div');
+					div.id = 'agent-streaming';
+					div.className = 'bg-gray-100 dark:bg-gray-700 rounded-lg p-3 max-w-[80%]';
+					div.innerHTML = '<div class="text-xs text-purple-600 dark:text-purple-400 mb-1 font-medium">Agent</div><pre class="whitespace-pre-wrap text-sm" id="agent-streaming-content"></pre>';
+					messages.appendChild(div);
+				}
+			}
+
+			function toolSummary(block) {
+				var name = block.name || 'Tool';
+				var detail = '';
+				if (block.input) {
+					if (block.input.file_path) detail = block.input.file_path;
+					else if (block.input.pattern) detail = block.input.pattern;
+					else if (block.input.command) detail = block.input.command.substring(0, 80);
+					else if (block.input.query) detail = block.input.query;
+					else if (block.input.prompt) detail = block.input.prompt.substring(0, 60);
+					else if (block.input.description) detail = block.input.description;
+				}
+				return name + (detail ? ' \u203a ' + detail : '');
+			}
+
+			function appendToolUse(block) {
+				var container = document.getElementById('agent-streaming');
+				if (!container) return;
+				var details = document.createElement('details');
+				details.className = 'my-1 text-sm';
+				if (block.id) details.id = 'tool-' + block.id;
+				var summary = document.createElement('summary');
+				summary.className = 'cursor-pointer text-blue-600 dark:text-blue-400';
+				summary.textContent = '\uD83D\uDD27 ' + toolSummary(block);
+				var pre = document.createElement('pre');
+				pre.className = 'text-xs bg-gray-50 dark:bg-gray-900 p-2 mt-1 max-h-40 overflow-auto rounded';
+				pre.textContent = 'Waiting for result...';
+				details.appendChild(summary);
+				details.appendChild(pre);
+				container.appendChild(details);
+				if (block.id) toolResultMap.set(block.id, pre);
+			}
+
+			function appendThinking(block) {
+				var container = document.getElementById('agent-streaming');
+				if (!container) return;
+				var details = document.createElement('details');
+				details.className = 'my-1 text-sm italic opacity-60';
+				var summary = document.createElement('summary');
+				summary.className = 'cursor-pointer text-gray-500 dark:text-gray-400';
+				summary.textContent = '\uD83E\uDDE0 Thinking...';
+				var pre = document.createElement('pre');
+				pre.className = 'text-xs p-2 mt-1 max-h-40 overflow-auto not-italic';
+				pre.textContent = block.thinking || '';
+				details.appendChild(summary);
+				details.appendChild(pre);
+				container.appendChild(details);
+			}
+
+			function fillToolResult(evt) {
+				var pre = toolResultMap.get(evt.tool_use_id);
+				if (pre) {
+					var content = evt.content;
+					if (typeof content !== 'string') content = JSON.stringify(content, null, 2);
+					pre.textContent = content;
+					toolResultMap.delete(evt.tool_use_id);
+				}
+			}
+
+			function formatTokens(n) {
+				if (n >= 1000) return (n / 1000).toFixed(1) + 'k';
+				return String(n);
+			}
+
+			function appendResultSummary(evt) {
+				var container = document.getElementById('agent-streaming');
+				if (!container) return;
+				var dur = evt.duration_ms ? (evt.duration_ms / 1000).toFixed(1) + 's' : '?';
+				var tokens = '?';
+				var cost = evt.total_cost_usd ? '$' + evt.total_cost_usd.toFixed(4) : '?';
+				if (evt.usage) {
+					tokens = formatTokens((evt.usage.input_tokens || 0) + (evt.usage.output_tokens || 0));
+				}
+				var details = document.createElement('details');
+				details.className = 'my-2 text-xs text-gray-400 dark:text-gray-500';
+				var summary = document.createElement('summary');
+				summary.className = 'cursor-pointer';
+				summary.textContent = '\u23F1 ' + dur + ' \u00b7 ' + tokens + ' tokens \u00b7 ' + cost;
+				var body = document.createElement('div');
+				body.className = 'p-2 mt-1 bg-gray-50 dark:bg-gray-900 rounded text-xs';
+				var lines = [];
+				if (evt.usage) {
+					lines.push('Input: ' + formatTokens(evt.usage.input_tokens || 0));
+					lines.push('Output: ' + formatTokens(evt.usage.output_tokens || 0));
+					if (evt.usage.cache_read_input_tokens) lines.push('Cache read: ' + formatTokens(evt.usage.cache_read_input_tokens));
+					if (evt.usage.cache_creation_input_tokens) lines.push('Cache created: ' + formatTokens(evt.usage.cache_creation_input_tokens));
+				}
+				if (evt.num_turns) lines.push('Turns: ' + evt.num_turns);
+				body.textContent = lines.join(' \u00b7 ');
+				details.appendChild(summary);
+				details.appendChild(body);
+				container.appendChild(details);
 			}
 
 			let hasPlan = false;
