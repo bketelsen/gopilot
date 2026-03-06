@@ -2,6 +2,7 @@ package orchestrator
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -178,8 +179,20 @@ func (o *Orchestrator) Tick(ctx context.Context) {
 		slog.Info("retrying issue", "issue", retry.Identifier, "attempt", retry.Attempt)
 		// Fetch fresh issue state for retry.
 		issue, err := o.github.FetchIssueState(ctx, retry.Repo, retry.IssueID)
-		if err != nil || issue == nil {
-			slog.Warn("retry: could not fetch issue state", "issue_id", retry.IssueID, "error", err)
+		if err != nil {
+			if errors.Is(err, gh.ErrNotFound) {
+				slog.Info("retry: issue not found, dropping retry", "issue_id", retry.IssueID)
+			} else if errors.Is(err, gh.ErrRateLimited) {
+				slog.Warn("retry: rate limited, re-enqueuing", "issue_id", retry.IssueID)
+				maxBackoff := time.Duration(o.cfg.Agent.MaxRetryBackoffMS) * time.Millisecond
+				o.retryQueue.Enqueue(retry.IssueID, retry.Repo, retry.Identifier, retry.Attempt, retry.Error, maxBackoff)
+			} else {
+				slog.Warn("retry: could not fetch issue state", "issue_id", retry.IssueID, "error", err)
+			}
+			continue
+		}
+		if issue == nil {
+			slog.Warn("retry: issue state returned nil", "issue_id", retry.IssueID)
 			continue
 		}
 		if !issue.IsEligible(o.cfg.GitHub.EligibleLabels, o.cfg.GitHub.ExcludedLabels) {
@@ -197,7 +210,13 @@ func (o *Orchestrator) Tick(ctx context.Context) {
 
 	issues, err := o.github.FetchCandidateIssues(ctx)
 	if err != nil {
-		slog.Error("failed to fetch candidates", "error", err)
+		if errors.Is(err, gh.ErrRateLimited) {
+			slog.Warn("rate limited while fetching candidates, will retry next tick", "error", err)
+		} else if errors.Is(err, gh.ErrUnauthorized) {
+			slog.Error("unauthorized — check GitHub token", "error", err)
+		} else {
+			slog.Error("failed to fetch candidates", "error", err)
+		}
 		return
 	}
 
@@ -473,7 +492,12 @@ func (o *Orchestrator) reconcile(ctx context.Context) {
 	for _, entry := range o.state.AllRunning() {
 		issue, err := o.github.FetchIssueState(ctx, entry.Issue.Repo, entry.Issue.ID)
 		if err != nil {
-			slog.Warn("reconcile: fetch failed", "issue", entry.Issue.Identifier(), "error", err)
+			if errors.Is(err, gh.ErrNotFound) {
+				slog.Info("reconcile: issue not found, stopping agent", "issue", entry.Issue.Identifier())
+				o.stopAndCleanup(ctx, entry, true)
+			} else {
+				slog.Warn("reconcile: fetch failed", "issue", entry.Issue.Identifier(), "error", err)
+			}
 			continue
 		}
 		if issue == nil {
