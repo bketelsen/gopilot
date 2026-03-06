@@ -37,7 +37,6 @@ type State struct {
 	history   map[int][]domain.CompletedRun
 	completed map[int]bool
 	planning  map[int]*PlanningEntry
-	totals    domain.TokenTotals
 }
 
 // NewState creates an empty state.

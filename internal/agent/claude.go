@@ -42,9 +42,7 @@ func (r *ClaudeRunner) Start(ctx context.Context, workspace string, prompt strin
 		"GITHUB_TOKEN="+r.Token,
 		"GH_TOKEN="+r.Token,
 	)
-	for _, e := range opts.Env {
-		cmd.Env = append(cmd.Env, e)
-	}
+	cmd.Env = append(cmd.Env, opts.Env...)
 
 	if err := cmd.Start(); err != nil {
 		cancel()
@@ -88,7 +86,7 @@ func (r *ClaudeRunner) Stop(sess *Session) error {
 	case <-sess.Done:
 		return nil
 	case <-time.After(10 * time.Second):
-		proc.Signal(syscall.SIGKILL)
+		proc.Signal(syscall.SIGKILL) //nolint:errcheck // best-effort kill
 		<-sess.Done
 		return nil
 	}

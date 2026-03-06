@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -94,8 +95,7 @@ func ParseBlockedBy(body string) []int {
 	var ids []int
 	for _, m := range matches {
 		if len(m) >= 2 {
-			var id int
-			fmt.Sscanf(m[1], "%d", &id)
+			id, _ := strconv.Atoi(m[1])
 			if id > 0 {
 				ids = append(ids, id)
 			}

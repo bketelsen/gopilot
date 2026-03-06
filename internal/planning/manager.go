@@ -65,6 +65,6 @@ func (m *Manager) Close(id string) {
 
 func generateID() string {
 	b := make([]byte, 8)
-	rand.Read(b)
+	rand.Read(b) //nolint:errcheck // crypto/rand.Read never errors
 	return fmt.Sprintf("plan-%x", b)
 }

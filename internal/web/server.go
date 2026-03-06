@@ -108,13 +108,13 @@ func (s *Server) SSEHub() *SSEHub {
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+	json.NewEncoder(w).Encode(map[string]string{"status": "ok"}) //nolint:errcheck // HTTP handler
 }
 
 func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 	running := s.state.AllRunning()
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{
+	json.NewEncoder(w).Encode(map[string]any{ //nolint:errcheck // HTTP handler
 		"running_count": len(running),
 		"running":       running,
 	})
@@ -123,9 +123,9 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	if s.metrics != nil {
-		json.NewEncoder(w).Encode(s.metrics.All())
+		json.NewEncoder(w).Encode(s.metrics.All()) //nolint:errcheck // HTTP handler
 	} else {
-		json.NewEncoder(w).Encode(map[string]int64{})
+		json.NewEncoder(w).Encode(map[string]int64{}) //nolint:errcheck // HTTP handler
 	}
 }
 
@@ -145,7 +145,7 @@ func (s *Server) handleDashboardPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	component := pages.Dashboard(running, retries, planningEntries, m, s.cfg.Polling.MaxConcurrentAgents)
-	component.Render(r.Context(), w)
+	component.Render(r.Context(), w) //nolint:errcheck // templ render to HTTP response
 }
 
 func (s *Server) handleDashboardFragment(w http.ResponseWriter, r *http.Request) {
@@ -163,7 +163,7 @@ func (s *Server) handleDashboardFragment(w http.ResponseWriter, r *http.Request)
 		m = s.metrics.All()
 	}
 	component := pages.DashboardContent(running, retries, planningEntries, m, s.cfg.Polling.MaxConcurrentAgents)
-	component.Render(r.Context(), w)
+	component.Render(r.Context(), w) //nolint:errcheck // templ render to HTTP response
 }
 
 func (s *Server) handleIssueDetail(w http.ResponseWriter, r *http.Request) {
@@ -179,7 +179,7 @@ func (s *Server) handleIssueDetail(w http.ResponseWriter, r *http.Request) {
 	running := s.state.GetRunning(id)
 	history := s.state.GetHistory(id)
 	component := pages.IssueDetail(running, history, id, fullRepo)
-	component.Render(r.Context(), w)
+	component.Render(r.Context(), w) //nolint:errcheck // templ render to HTTP response
 }
 
 func (s *Server) handleIssueDetailAPI(w http.ResponseWriter, r *http.Request) {
@@ -193,7 +193,7 @@ func (s *Server) handleIssueDetailAPI(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = owner + "/" + repo
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{
+	json.NewEncoder(w).Encode(map[string]any{ //nolint:errcheck // HTTP handler
 		"running": s.state.GetRunning(id),
 		"history": s.state.GetHistory(id),
 	})
@@ -226,13 +226,13 @@ func (s *Server) handleSprintPage(w http.ResponseWriter, r *http.Request) {
 		Done:      len(byStatus["Done"]),
 	}
 	component := pages.Sprint(data)
-	component.Render(r.Context(), w)
+	component.Render(r.Context(), w) //nolint:errcheck // templ render to HTTP response
 }
 
 func (s *Server) handleSprintAPI(w http.ResponseWriter, r *http.Request) {
 	running := s.state.AllRunning()
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{
+	json.NewEncoder(w).Encode(map[string]any{ //nolint:errcheck // HTTP handler
 		"running_count": len(running),
 		"running":       running,
 	})
@@ -257,7 +257,7 @@ func (s *Server) handleSettingsPage(w http.ResponseWriter, r *http.Request) {
 		RateLimit:     int(m["github_rate_limit_limit"]),
 	}
 	component := pages.Settings(data)
-	component.Render(r.Context(), w)
+	component.Render(r.Context(), w) //nolint:errcheck // templ render to HTTP response
 }
 
 func (s *Server) handlePlanningListPage(w http.ResponseWriter, r *http.Request) {
@@ -267,7 +267,7 @@ func (s *Server) handlePlanningListPage(w http.ResponseWriter, r *http.Request) 
 	}
 	repos := s.cfg.GitHub.Repos
 	component := pages.PlanningList(sessions, repos)
-	component.Render(r.Context(), w)
+	component.Render(r.Context(), w) //nolint:errcheck // templ render to HTTP response
 }
 
 func (s *Server) handlePlanningChatPage(w http.ResponseWriter, r *http.Request) {
@@ -282,7 +282,7 @@ func (s *Server) handlePlanningChatPage(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	component := pages.PlanningChat(sess)
-	component.Render(r.Context(), w)
+	component.Render(r.Context(), w) //nolint:errcheck // templ render to HTTP response
 }
 
 func isCommandAvailable(name string) bool {
@@ -307,5 +307,5 @@ func (s *Server) handleRefresh(w http.ResponseWriter, r *http.Request) {
 		s.triggerRefresh()
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "triggered"})
+	json.NewEncoder(w).Encode(map[string]string{"status": "triggered"}) //nolint:errcheck // HTTP handler
 }

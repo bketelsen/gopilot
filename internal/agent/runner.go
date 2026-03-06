@@ -16,7 +16,7 @@ type Session struct {
 }
 
 // AgentOpts configures an agent launch.
-type AgentOpts struct {
+type AgentOpts struct { //nolint:revive // renaming would break existing callers
 	Model            string
 	MaxContinuations int
 	Env              []string

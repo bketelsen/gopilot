@@ -9,7 +9,7 @@ import (
 )
 
 // PromptData is the data passed to the prompt template.
-type PromptData struct {
+type PromptData struct { //nolint:revive // renaming would break template consumers
 	Issue   domain.Issue
 	Attempt int
 	Skills  string

@@ -45,7 +45,7 @@ func (h *SSEHub) Broadcast(eventType string, data string) {
 // BroadcastComponent renders a templ component and broadcasts its HTML.
 func (h *SSEHub) BroadcastComponent(eventType string, component templ.Component) {
 	var buf bytes.Buffer
-	component.Render(context.Background(), &buf)
+	component.Render(context.Background(), &buf) //nolint:errcheck // best-effort render for broadcast
 	h.Broadcast(eventType, buf.String())
 }
 

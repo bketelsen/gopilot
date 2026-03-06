@@ -42,9 +42,7 @@ func (r *CopilotRunner) Start(ctx context.Context, workspace string, prompt stri
 		"COPILOT_GITHUB_TOKEN="+r.Token,
 		"GH_TOKEN="+r.Token,
 	)
-	for _, e := range opts.Env {
-		cmd.Env = append(cmd.Env, e)
-	}
+	cmd.Env = append(cmd.Env, opts.Env...)
 
 	if err := cmd.Start(); err != nil {
 		cancel()
@@ -92,7 +90,7 @@ func (r *CopilotRunner) Stop(sess *Session) error {
 		return nil
 	case <-time.After(10 * time.Second):
 		slog.Warn("agent did not exit after SIGTERM, sending SIGKILL", "pid", sess.PID)
-		proc.Signal(syscall.SIGKILL)
+		proc.Signal(syscall.SIGKILL) //nolint:errcheck // best-effort kill
 		<-sess.Done
 		return nil
 	}
