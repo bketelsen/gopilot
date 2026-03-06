@@ -27,6 +27,7 @@ type WSMessage struct {
 type HandlerConfig struct {
 	WorkspaceRoot string
 	SkillText     string
+	GitHubClient  IssueCreator
 }
 
 // Handler manages WebSocket connections for planning sessions.
