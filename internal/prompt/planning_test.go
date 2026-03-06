@@ -29,21 +29,33 @@ func TestRenderPlanningPrompt(t *testing.T) {
 	if !strings.Contains(result, "We need user authentication with OAuth") {
 		t.Error("missing issue body")
 	}
-	if !strings.Contains(result, "gopilot[bot]: What providers?") {
+	if !strings.Contains(result, "**gopilot[bot]:** What providers?") {
 		t.Error("missing bot comment")
 	}
-	if !strings.Contains(result, "user: Google and GitHub") {
+	if !strings.Contains(result, "**user:** Google and GitHub") {
 		t.Error("missing user comment")
 	}
 	if !strings.Contains(result, "planning agent") {
 		t.Error("missing skill content")
 	}
+	if !strings.Contains(result, "gh issue comment 1 --repo o/r") {
+		t.Error("missing gh CLI instruction")
+	}
+	if !strings.Contains(result, "You do NOT write code") {
+		t.Error("missing planning-only constraint")
+	}
+	if !strings.Contains(result, "<!-- gopilot-planning-agent -->") {
+		t.Error("missing planning comment marker instruction")
+	}
 }
 
 func TestRenderPlanningNoComments(t *testing.T) {
-	issue := domain.Issue{ID: 1, Title: "Test", Body: "Body"}
+	issue := domain.Issue{ID: 1, Repo: "o/r", Title: "Test", Body: "Body"}
 	result := RenderPlanning(issue, nil, "skill")
 	if strings.Contains(result, "Conversation History") {
 		t.Error("should not contain conversation history when no comments")
+	}
+	if !strings.Contains(result, "gh issue comment 1 --repo o/r") {
+		t.Error("should always contain gh CLI instruction")
 	}
 }

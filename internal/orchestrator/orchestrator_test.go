@@ -54,7 +54,6 @@ func (m *mockGitHub) CreateIssue(ctx context.Context, repo, title, body string, 
 func (m *mockGitHub) AddSubIssue(ctx context.Context, repo string, parentID, childID int) error {
 	return nil
 }
-
 // mockAgent implements agent.Runner for testing.
 type mockAgent struct {
 	started int
@@ -298,7 +297,6 @@ func (m *mockGitHubSplit) CreateIssue(ctx context.Context, repo, title, body str
 func (m *mockGitHubSplit) AddSubIssue(ctx context.Context, repo string, parentID, childID int) error {
 	return nil
 }
-
 func TestRetrySkipsIneligibleIssue(t *testing.T) {
 	cfg := &config.Config{
 		GitHub: config.GitHubConfig{

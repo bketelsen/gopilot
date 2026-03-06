@@ -2,13 +2,21 @@ package logging
 
 import (
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 )
 
-// Setup configures the global slog logger to write JSON to stderr.
-func Setup(level slog.Level) {
-	handler := slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{
+// Setup configures the global slog logger to write JSON to stderr and optionally a file.
+func Setup(level slog.Level, logFile string) {
+	var w io.Writer = os.Stderr
+	if logFile != "" {
+		f, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+		if err == nil {
+			w = io.MultiWriter(os.Stderr, f)
+		}
+	}
+	handler := slog.NewJSONHandler(w, &slog.HandlerOptions{
 		Level: level,
 	})
 	slog.SetDefault(slog.New(handler))

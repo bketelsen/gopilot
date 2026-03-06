@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -180,6 +181,14 @@ func (o *Orchestrator) Tick(ctx context.Context) {
 			continue
 		}
 		o.state.Release(issue.ID) // Release claim so dispatch can re-claim
+		// Route planning issues back through the planning path, not coding.
+		if o.state.IsPlanning(issue.ID) {
+			entry := o.state.GetPlanning(issue.ID)
+			if entry != nil {
+				o.dispatchPlanningAgent(ctx, *issue, entry)
+				continue
+			}
+		}
 		o.dispatch(ctx, *issue, retry.Attempt)
 	}
 
@@ -260,6 +269,12 @@ func (o *Orchestrator) stopSession(sess *agent.Session) {
 }
 
 func (o *Orchestrator) dispatch(ctx context.Context, issue domain.Issue, attempt int) {
+	// Never dispatch planning-labeled issues as coding agents.
+	for _, label := range issue.Labels {
+		if strings.EqualFold(label, o.cfg.Planning.Label) {
+			return
+		}
+	}
 	if !o.state.Claim(issue.ID) {
 		return
 	}
@@ -367,12 +382,35 @@ func (o *Orchestrator) monitorAgent(issue domain.Issue, sess *agent.Session, ent
 		o.metrics.Increment("issues_completed")
 
 		// Don't mark planning issues as fully completed — they need multi-turn dispatch
-		if !o.state.IsPlanning(issue.ID) {
+		if o.state.IsPlanning(issue.ID) {
+			// Snapshot the latest comment ID so we only detect truly new human
+			// comments on subsequent ticks — not comments the agent just posted.
+			if comments, err := o.github.FetchIssueComments(context.Background(), issue.Repo, issue.ID); err == nil {
+				var maxID int
+				for _, c := range comments {
+					if c.ID > maxID {
+						maxID = c.ID
+					}
+				}
+				o.state.UpdatePlanning(issue.ID, func(e *PlanningEntry) {
+					if maxID > e.LastCommentID {
+						e.LastCommentID = maxID
+					}
+				})
+			}
+		} else {
 			o.state.MarkCompleted(issue.ID)
 		}
 		o.state.Release(issue.ID)
 	} else {
 		log.Warn("agent exited with error", "exit_code", sess.ExitCode, "error", sess.ExitErr)
+
+		// Reset planning phase so retry dispatches correctly.
+		if o.state.IsPlanning(issue.ID) {
+			o.state.UpdatePlanning(issue.ID, func(e *PlanningEntry) {
+				e.Phase = PlanningPhaseDetected
+			})
+		}
 
 		errMsg := "exit code " + strconv.Itoa(sess.ExitCode)
 		if sess.ExitErr != nil {
@@ -406,6 +444,9 @@ func (o *Orchestrator) detectStalls(ctx context.Context) {
 
 			duration := time.Since(entry.StartedAt).Round(time.Second)
 			comment := fmt.Sprintf("Agent stalled after %s, retrying (attempt %d)", duration, entry.Attempt)
+			if o.state.IsPlanning(entry.Issue.ID) {
+				comment += "\n\n" + PlanningCommentMarker
+			}
 			o.github.AddComment(ctx, entry.Issue.Repo, entry.Issue.ID, comment)
 
 			if entry.Attempt < o.cfg.Agent.MaxRetries {
@@ -475,6 +516,9 @@ func (o *Orchestrator) handleMaxRetriesExceeded(issue domain.Issue, lastError st
 	}
 
 	comment := fmt.Sprintf("Gopilot failed after %d attempts. Last error: %s", o.cfg.Agent.MaxRetries, lastError)
+	if o.state.IsPlanning(issue.ID) {
+		comment += "\n\n" + PlanningCommentMarker
+	}
 	o.github.AddComment(context.Background(), issue.Repo, issue.ID, comment)
 	o.github.AddLabel(context.Background(), issue.Repo, issue.ID, "gopilot-failed")
 }

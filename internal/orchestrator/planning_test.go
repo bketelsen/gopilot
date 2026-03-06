@@ -60,12 +60,50 @@ func TestHasNewHumanCommentBotOnly(t *testing.T) {
 	}
 }
 
-func TestIsBot(t *testing.T) {
-	if !isBot("gopilot[bot]") {
+func TestIsBotComment(t *testing.T) {
+	if !isBotComment(domain.Comment{Author: "gopilot[bot]", Body: "hello"}) {
 		t.Error("gopilot[bot] should be a bot")
 	}
-	if isBot("alice") {
-		t.Error("alice should not be a bot")
+	if isBotComment(domain.Comment{Author: "alice", Body: "hello"}) {
+		t.Error("alice with no marker should not be a bot")
+	}
+	// Comment with planning marker should be treated as bot
+	if !isBotComment(domain.Comment{Author: "bketelsen", Body: "some text\n" + PlanningCommentMarker}) {
+		t.Error("comment with planning marker should be treated as bot")
+	}
+	// Human comment from same user without marker is NOT bot
+	if isBotComment(domain.Comment{Author: "bketelsen", Body: "please add OAuth"}) {
+		t.Error("human comment without marker should not be treated as bot")
+	}
+}
+
+func TestHasNewHumanCommentIgnoresMarkedComments(t *testing.T) {
+	client := &stubCommentClient{
+		comments: []domain.Comment{
+			{ID: 100, Author: "gopilot[bot]", Body: "What is the goal?", CreatedAt: time.Now().Add(-time.Minute)},
+			{ID: 101, Author: "bketelsen", Body: "Agent response\n" + PlanningCommentMarker, CreatedAt: time.Now()},
+		},
+	}
+
+	hasNew, lastID := hasNewHumanComment(client, context.Background(), "o/r", 1, 100)
+	if hasNew {
+		t.Error("hasNew = true, want false (comment has planning marker)")
+	}
+	if lastID != 101 {
+		t.Errorf("lastID = %d, want 101", lastID)
+	}
+
+	// But a real human comment from the same user IS detected
+	client.comments = append(client.comments, domain.Comment{
+		ID: 102, Author: "bketelsen", Body: "please use Google OAuth", CreatedAt: time.Now(),
+	})
+
+	hasNew, lastID = hasNewHumanComment(client, context.Background(), "o/r", 1, 101)
+	if !hasNew {
+		t.Error("hasNew = false, want true (real human comment)")
+	}
+	if lastID != 102 {
+		t.Errorf("lastID = %d, want 102", lastID)
 	}
 }
 

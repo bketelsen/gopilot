@@ -34,13 +34,14 @@ func main() {
 	dryRun := flag.Bool("dry-run", false, "list eligible issues without dispatching")
 	debug := flag.Bool("debug", false, "enable debug logging")
 	port := flag.String("port", "", "override dashboard listen port (e.g., 8080)")
+	logFile := flag.String("log", "", "write logs to file (in addition to stderr)")
 	flag.Parse()
 
 	level := slog.LevelInfo
 	if *debug {
 		level = slog.LevelDebug
 	}
-	logging.Setup(level)
+	logging.Setup(level, *logFile)
 
 	cfg, err := config.Load(*configPath)
 	if err != nil {
@@ -55,11 +56,21 @@ func main() {
 
 	restClient := ghclient.NewRESTClient(cfg.GitHub, "https://api.github.com/")
 
-	runners := map[string]agent.Runner{
-		cfg.Agent.Command: &agent.CopilotRunner{
+	var defaultRunner agent.Runner
+	switch cfg.Agent.Command {
+	case "claude", "claude-code":
+		defaultRunner = &agent.ClaudeRunner{
 			Command: cfg.Agent.Command,
 			Token:   cfg.GitHub.Token,
-		},
+		}
+	default:
+		defaultRunner = &agent.CopilotRunner{
+			Command: cfg.Agent.Command,
+			Token:   cfg.GitHub.Token,
+		}
+	}
+	runners := map[string]agent.Runner{
+		cfg.Agent.Command: defaultRunner,
 	}
 	for _, override := range cfg.Agent.Overrides {
 		if _, exists := runners[override.Command]; !exists {

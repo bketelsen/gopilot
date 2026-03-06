@@ -25,3 +25,4 @@ coverage.out
 
 # Tailwind CSS standalone CLI
 bin/
+gopilot.log

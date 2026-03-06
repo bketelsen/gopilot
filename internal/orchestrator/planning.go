@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"os"
 	"strings"
 	"time"
 
@@ -37,7 +38,13 @@ func partitionPlanningIssues(issues []domain.Issue, planningLabel string) (plann
 	return
 }
 
+// PlanningCommentMarker is a hidden HTML comment added to all planning agent comments.
+// Used to distinguish agent-posted comments from human comments by the same user.
+const PlanningCommentMarker = "<!-- gopilot-planning-agent -->"
+
 // hasNewHumanComment checks if there are new non-bot comments after lastCommentID.
+// A comment is considered "bot" if the author ends in [bot] or the body contains
+// the PlanningCommentMarker (indicating it was posted by the planning agent).
 func hasNewHumanComment(client commentFetcher, ctx context.Context, repo string, issueID, lastCommentID int) (bool, int) {
 	comments, err := client.FetchIssueComments(ctx, repo, issueID)
 	if err != nil {
@@ -47,7 +54,7 @@ func hasNewHumanComment(client commentFetcher, ctx context.Context, repo string,
 	latestID := lastCommentID
 	hasNew := false
 	for _, c := range comments {
-		if c.ID > lastCommentID && !isBot(c.Author) {
+		if c.ID > lastCommentID && !isBotComment(c) {
 			hasNew = true
 		}
 		if c.ID > latestID {
@@ -57,9 +64,12 @@ func hasNewHumanComment(client commentFetcher, ctx context.Context, repo string,
 	return hasNew, latestID
 }
 
-// isBot returns true if the author looks like a bot account.
-func isBot(author string) bool {
-	return strings.HasSuffix(author, "[bot]")
+// isBotComment returns true if the comment was posted by a bot account or by the planning agent.
+func isBotComment(c domain.Comment) bool {
+	if strings.HasSuffix(c.Author, "[bot]") {
+		return true
+	}
+	return strings.Contains(c.Body, PlanningCommentMarker)
 }
 
 // processPlanningIssues handles planning-labeled issues.
@@ -67,12 +77,19 @@ func (o *Orchestrator) processPlanningIssues(ctx context.Context, issues []domai
 	for _, issue := range issues {
 		if o.state.IsPlanning(issue.ID) {
 			entry := o.state.GetPlanning(issue.ID)
-			if entry.Phase == PlanningPhaseAwaitingReply || entry.Phase == PlanningPhasePlanProposed || entry.Phase == PlanningPhaseAwaitingApproval {
+			switch entry.Phase {
+			case PlanningPhaseDetected:
+				// Previous attempt failed and was reset — re-dispatch.
+				o.dispatchPlanningAgent(ctx, issue, entry)
+			case PlanningPhaseAwaitingReply, PlanningPhasePlanProposed, PlanningPhaseAwaitingApproval:
 				hasNew, lastID := hasNewHumanComment(o.github, ctx, issue.Repo, issue.ID, entry.LastCommentID)
-				if hasNew {
+				// Always update the high-water mark so we don't re-scan old comments.
+				if lastID > entry.LastCommentID {
 					o.state.UpdatePlanning(issue.ID, func(e *PlanningEntry) {
 						e.LastCommentID = lastID
 					})
+				}
+				if hasNew {
 					if o.sseHub != nil {
 						o.sseHub.Broadcast("planning:reply_detected", fmt.Sprintf(`{"issue_id":%d}`, issue.ID))
 					}
@@ -114,6 +131,15 @@ func (o *Orchestrator) dispatchPlanningAgent(ctx context.Context, issue domain.I
 		return
 	}
 
+	// Record the highest comment ID before dispatching so we only detect
+	// comments posted AFTER the agent runs.
+	var highWater int
+	for _, c := range comments {
+		if c.ID > highWater {
+			highWater = c.ID
+		}
+	}
+
 	planningSkillText := skills.InjectSkills(o.skills, []string{"planning"}, nil)
 	rendered := prompt.RenderPlanning(issue, comments, planningSkillText)
 
@@ -140,10 +166,17 @@ func (o *Orchestrator) dispatchPlanningAgent(ctx context.Context, issue domain.I
 		Model:            model,
 		MaxContinuations: o.cfg.Agent.MaxAutopilotContinues,
 	}
-	// Planning agents don't need a workspace — they interact via GitHub comments only.
-	sess, err := runner.Start(ctx, "", rendered, opts)
+	// Planning agents run in a temp directory — they don't need a code workspace.
+	tmpDir, mkErr := os.MkdirTemp("", "gopilot-planning-*")
+	if mkErr != nil {
+		log.Error("failed to create temp dir for planning", "error", mkErr)
+		o.state.Release(issue.ID)
+		return
+	}
+	sess, err := runner.Start(ctx, tmpDir, rendered, opts)
 	if err != nil {
 		log.Error("planning agent start failed", "error", err)
+		os.RemoveAll(tmpDir)
 		o.state.Release(issue.ID)
 		return
 	}
@@ -166,6 +199,9 @@ func (o *Orchestrator) dispatchPlanningAgent(ctx context.Context, issue domain.I
 	o.state.UpdatePlanning(issue.ID, func(e *PlanningEntry) {
 		e.Phase = PlanningPhaseAwaitingReply
 		e.QuestionsAsked++
+		if highWater > e.LastCommentID {
+			e.LastCommentID = highWater
+		}
 	})
 
 	log.Info("planning agent dispatched", "session_id", sess.ID)
