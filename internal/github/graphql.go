@@ -228,7 +228,7 @@ func (c *GraphQLClient) execute(ctx context.Context, query string, variables map
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("GraphQL error %d: %s", resp.StatusCode, respBody)
+		return nil, newAPIError(resp.StatusCode, string(respBody))
 	}
 
 	var result map[string]any

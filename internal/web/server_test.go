@@ -5,11 +5,13 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/bketelsen/gopilot/internal/config"
 	"github.com/bketelsen/gopilot/internal/domain"
+	"github.com/bketelsen/gopilot/internal/skills"
 )
 
 // mockState implements StateProvider for testing.
@@ -27,6 +29,57 @@ func (m *mockState) RunningCount() int {
 
 func (m *mockState) GetRunning(issueID int) *domain.RunEntry { return nil }
 func (m *mockState) GetHistory(issueID int) []domain.CompletedRun { return nil }
+
+func TestSettingsPageShowsSkills(t *testing.T) {
+	state := &mockState{}
+	cfg := &config.Config{}
+	loadedSkills := []*skills.Skill{
+		{Name: "git-commit", Type: "required", Description: "Handles git commits"},
+		{Name: "testing", Type: "optional", Description: "Runs tests"},
+	}
+
+	srv := NewServer(state, cfg, nil, nil)
+	srv.SetSkills(loadedSkills)
+
+	req := httptest.NewRequest("GET", "/settings", nil)
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", w.Code)
+	}
+
+	body := w.Body.String()
+	if strings.Contains(body, "No skills loaded") {
+		t.Error("settings page should not show 'No skills loaded' when skills are provided")
+	}
+	if !strings.Contains(body, "git-commit") {
+		t.Error("settings page should contain skill name 'git-commit'")
+	}
+	if !strings.Contains(body, "testing") {
+		t.Error("settings page should contain skill name 'testing'")
+	}
+}
+
+func TestSettingsPageNoSkills(t *testing.T) {
+	state := &mockState{}
+	cfg := &config.Config{}
+
+	srv := NewServer(state, cfg, nil, nil)
+
+	req := httptest.NewRequest("GET", "/settings", nil)
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", w.Code)
+	}
+
+	body := w.Body.String()
+	if !strings.Contains(body, "No skills loaded") {
+		t.Error("settings page should show 'No skills loaded' when no skills are provided")
+	}
+}
 
 func TestHealthEndpoint(t *testing.T) {
 	state := &mockState{}

@@ -151,3 +151,48 @@ func TestGraphQLErrorsUsesWrapping(t *testing.T) {
 	}
 	_ = fmt.Errorf // ensure import used
 }
+
+func TestGraphQLHTTPErrorReturnsAPIError(t *testing.T) {
+	tests := []struct {
+		name       string
+		statusCode int
+		sentinel   error
+	}{
+		{"401 maps to ErrUnauthorized", 401, ErrUnauthorized},
+		{"403 maps to ErrRateLimited", 403, ErrRateLimited},
+		{"404 maps to ErrNotFound", 404, ErrNotFound},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(tt.statusCode)
+				w.Write([]byte(`{"message":"error"}`))
+			}))
+			defer server.Close()
+
+			cfg := config.GitHubConfig{
+				Token:   "test-token",
+				Project: config.ProjectConfig{Owner: "testuser", Number: 1},
+			}
+			gql := NewGraphQLClient(cfg, server.URL+"/graphql")
+			gql.meta = &ProjectMeta{
+				ProjectID:     "PVT_123",
+				StatusFieldID: "F1",
+				StatusOptions: map[string]string{"In Progress": "opt1"},
+			}
+
+			err := gql.SetProjectStatus(context.Background(), "item1", "In Progress")
+			if err == nil {
+				t.Fatal("expected error, got nil")
+			}
+			if !errors.Is(err, tt.sentinel) {
+				t.Errorf("errors.Is(err, %v) = false; err = %v", tt.sentinel, err)
+			}
+			var apiErr *APIError
+			if !errors.As(err, &apiErr) {
+				t.Errorf("errors.As(*APIError) = false; err = %v", err)
+			}
+		})
+	}
+}

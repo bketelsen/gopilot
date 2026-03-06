@@ -111,7 +111,7 @@ func (c *RESTClient) fetchRepoIssues(ctx context.Context, repo string) ([]domain
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("GitHub API error %d: %s", resp.StatusCode, body)
+		return nil, fmt.Errorf("fetch issues for %s: %w", repo, newAPIError(resp.StatusCode, string(body)))
 	}
 
 	var raw []ghIssue
@@ -152,7 +152,7 @@ func (c *RESTClient) FetchIssueState(ctx context.Context, repo string, id int) (
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("fetch issue state %s#%d: GitHub API error %d: %s", repo, id, resp.StatusCode, body)
+		return nil, fmt.Errorf("fetch issue state %s#%d: %w", repo, id, newAPIError(resp.StatusCode, string(body)))
 	}
 
 	var raw ghIssue
@@ -189,7 +189,7 @@ func (c *RESTClient) AddComment(ctx context.Context, repo string, id int, body s
 
 	if resp.StatusCode != http.StatusCreated {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("add comment to %s#%d: GitHub API error %d: %s", repo, id, resp.StatusCode, body)
+		return fmt.Errorf("add comment to %s#%d: %w", repo, id, newAPIError(resp.StatusCode, string(body)))
 	}
 	return nil
 }
@@ -220,7 +220,7 @@ func (c *RESTClient) AddLabel(ctx context.Context, repo string, id int, label st
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("add label %q to %s#%d: GitHub API error %d: %s", label, repo, id, resp.StatusCode, body)
+		return fmt.Errorf("add label %q to %s#%d: %w", label, repo, id, newAPIError(resp.StatusCode, string(body)))
 	}
 	return nil
 }
@@ -284,7 +284,7 @@ func (c *RESTClient) FetchIssueComments(ctx context.Context, repo string, id int
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("GitHub API error %d: %s", resp.StatusCode, body)
+		return nil, fmt.Errorf("fetch comments for %s#%d: %w", repo, id, newAPIError(resp.StatusCode, string(body)))
 	}
 
 	var raw []ghComment
@@ -327,7 +327,7 @@ func (c *RESTClient) RemoveLabel(ctx context.Context, repo string, id int, label
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("GitHub API error %d: %s", resp.StatusCode, body)
+		return fmt.Errorf("remove label %q from %s#%d: %w", label, repo, id, newAPIError(resp.StatusCode, string(body)))
 	}
 	return nil
 }
@@ -363,7 +363,7 @@ func (c *RESTClient) CreateIssue(ctx context.Context, repo, title, body string, 
 
 	if resp.StatusCode != http.StatusCreated {
 		respBody, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("create issue in %s: GitHub API error %d: %s", repo, resp.StatusCode, respBody)
+		return nil, fmt.Errorf("create issue in %s: %w", repo, newAPIError(resp.StatusCode, string(respBody)))
 	}
 
 	var raw ghIssue
@@ -399,7 +399,7 @@ func (c *RESTClient) AddSubIssue(ctx context.Context, repo string, parentID, chi
 
 	if resp.StatusCode != http.StatusCreated {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("GitHub API error %d: %s", resp.StatusCode, body)
+		return fmt.Errorf("add sub-issue %d to %s#%d: %w", childID, repo, parentID, newAPIError(resp.StatusCode, string(body)))
 	}
 	return nil
 }
@@ -438,7 +438,7 @@ func (c *RESTClient) GetRepoLabel(ctx context.Context, repo string, name string)
 	}
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("get label %q from %s: GitHub API error %d: %s", name, repo, resp.StatusCode, body)
+		return nil, fmt.Errorf("get label %q from %s: %w", name, repo, newAPIError(resp.StatusCode, string(body)))
 	}
 
 	var label RepoLabel
@@ -482,7 +482,7 @@ func (c *RESTClient) CreateRepoLabel(ctx context.Context, repo, name, color, des
 
 	if resp.StatusCode != http.StatusCreated {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("create label %q in %s: GitHub API error %d: %s", name, repo, resp.StatusCode, body)
+		return fmt.Errorf("create label %q in %s: %w", name, repo, newAPIError(resp.StatusCode, string(body)))
 	}
 	return nil
 }
@@ -520,7 +520,7 @@ func (c *RESTClient) UpdateRepoLabel(ctx context.Context, repo, name, color, des
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("GitHub API error %d: %s", resp.StatusCode, body)
+		return fmt.Errorf("update label %q in %s: %w", name, repo, newAPIError(resp.StatusCode, string(body)))
 	}
 	return nil
 }
