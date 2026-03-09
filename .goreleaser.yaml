@@ -2,7 +2,7 @@ version: 2
 
 before:
   hooks:
-    - sh -c "$(curl --location https://taskfile.dev/install.sh)" -- -d -b /usr/local/bin
+    - curl --location https://taskfile.dev/install.sh | sh -s -- -d -b /usr/local/bin
     - task generate
     - task css
 
