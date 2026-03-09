@@ -8,7 +8,7 @@ import (
 	"github.com/bketelsen/gopilot/internal/skills"
 )
 
-func ExampleLoadFromDir() {
+func ExampleDiscover() {
 	dir, _ := os.MkdirTemp("", "example-skills")
 	defer os.RemoveAll(dir)
 
@@ -21,7 +21,7 @@ description: Test-driven development workflow
 
 Write tests before implementation.`), 0644)
 
-	loaded, err := skills.LoadFromDir(dir)
+	loaded, err := skills.Discover([]string{dir})
 	if err != nil {
 		fmt.Println("error:", err)
 		return

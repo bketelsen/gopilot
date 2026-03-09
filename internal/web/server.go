@@ -318,6 +318,7 @@ func (s *Server) handleSettingsPage(w http.ResponseWriter, r *http.Request) {
 		skillDisplays = append(skillDisplays, pages.SkillDisplay{
 			Name:        sk.Name,
 			Description: sk.Description,
+			Location:    sk.Location,
 		})
 	}
 

@@ -17,6 +17,7 @@ type SettingsData struct {
 type SkillDisplay struct {
 	Name        string
 	Description string
+	Location    string
 }
 
 templ Settings(data SettingsData) {
@@ -64,9 +65,14 @@ templ Settings(data SettingsData) {
 						<li class="px-4 py-3 text-gray-500 text-sm">No skills loaded</li>
 					}
 					for _, skill := range data.Skills {
-						<li class="px-4 py-3 flex items-center gap-3">
-							<span class="font-medium">{ skill.Name }</span>
-							<span class="text-sm text-gray-500">{ skill.Description }</span>
+						<li class="px-4 py-3">
+							<div class="flex items-center gap-3">
+								<span class="font-medium">{ skill.Name }</span>
+								<span class="text-sm text-gray-500">{ skill.Description }</span>
+							</div>
+							if skill.Location != "" {
+								<div class="text-xs text-gray-400 mt-0.5 font-mono truncate">{ skill.Location }</div>
+							}
 						</li>
 					}
 				</ul>
@@ -108,18 +114,5 @@ templ Settings(data SettingsData) {
 				</ul>
 			</div>
 		</div>
-	}
-}
-
-templ SkillTypeBadge(skillType string) {
-	switch skillType {
-		case "rigid":
-			<span class="px-2 py-0.5 text-xs rounded bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">rigid</span>
-		case "flexible":
-			<span class="px-2 py-0.5 text-xs rounded bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">flexible</span>
-		case "technique":
-			<span class="px-2 py-0.5 text-xs rounded bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200">technique</span>
-		default:
-			<span class="px-2 py-0.5 text-xs rounded bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200">{ skillType }</span>
 	}
 }
