@@ -16,7 +16,6 @@ type SettingsData struct {
 
 type SkillDisplay struct {
 	Name        string
-	Type        string
 	Description string
 }
 
@@ -67,7 +66,6 @@ templ Settings(data SettingsData) {
 					for _, skill := range data.Skills {
 						<li class="px-4 py-3 flex items-center gap-3">
 							<span class="font-medium">{ skill.Name }</span>
-							@SkillTypeBadge(skill.Type)
 							<span class="text-sm text-gray-500">{ skill.Description }</span>
 						</li>
 					}

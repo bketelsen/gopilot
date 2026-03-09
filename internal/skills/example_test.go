@@ -17,7 +17,6 @@ func ExampleLoadFromDir() {
 	os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte(`---
 name: tdd
 description: Test-driven development workflow
-type: rigid
 ---
 
 Write tests before implementation.`), 0644)
@@ -30,9 +29,7 @@ Write tests before implementation.`), 0644)
 
 	fmt.Println("count:", len(loaded))
 	fmt.Println("name:", loaded[0].Name)
-	fmt.Println("type:", loaded[0].Type)
 	// Output:
 	// count: 1
 	// name: tdd
-	// type: rigid
 }

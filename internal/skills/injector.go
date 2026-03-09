@@ -34,5 +34,5 @@ func InjectSkills(allSkills []*Skill, required []string, optional []string) stri
 }
 
 func formatSkill(skill *Skill) string {
-	return fmt.Sprintf("## Skill: %s (%s)\n\n%s", skill.Name, skill.Type, skill.Content)
+	return fmt.Sprintf("## Skill: %s\n\n%s", skill.Name, skill.Content)
 }

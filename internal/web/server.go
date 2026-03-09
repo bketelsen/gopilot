@@ -317,7 +317,6 @@ func (s *Server) handleSettingsPage(w http.ResponseWriter, r *http.Request) {
 	for _, sk := range s.skills {
 		skillDisplays = append(skillDisplays, pages.SkillDisplay{
 			Name:        sk.Name,
-			Type:        sk.Type,
 			Description: sk.Description,
 		})
 	}

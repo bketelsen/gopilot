@@ -7,9 +7,9 @@ import (
 
 func TestInjectRequired(t *testing.T) {
 	skills := []*Skill{
-		{Name: "tdd", Type: "rigid", Content: "Write tests first."},
-		{Name: "verification", Type: "rigid", Content: "Verify before claiming done."},
-		{Name: "debugging", Type: "technique", Content: "Debug systematically."},
+		{Name: "tdd", Content: "Write tests first."},
+		{Name: "verification", Content: "Verify before claiming done."},
+		{Name: "debugging", Content: "Debug systematically."},
 	}
 	required := []string{"tdd", "verification"}
 
@@ -27,8 +27,8 @@ func TestInjectRequired(t *testing.T) {
 
 func TestInjectOptional(t *testing.T) {
 	skills := []*Skill{
-		{Name: "tdd", Type: "rigid", Content: "Write tests first."},
-		{Name: "debugging", Type: "technique", Content: "Debug systematically."},
+		{Name: "tdd", Content: "Write tests first."},
+		{Name: "debugging", Content: "Debug systematically."},
 	}
 	required := []string{"tdd"}
 	optional := []string{"debugging"}
@@ -41,14 +41,11 @@ func TestInjectOptional(t *testing.T) {
 
 func TestInjectFormatting(t *testing.T) {
 	skills := []*Skill{
-		{Name: "tdd", Type: "rigid", Content: "TDD content here."},
+		{Name: "tdd", Content: "TDD content here."},
 	}
 	result := InjectSkills(skills, []string{"tdd"}, nil)
 
 	if !strings.Contains(result, "## Skill: tdd") {
 		t.Error("missing skill section header")
-	}
-	if !strings.Contains(result, "(rigid)") {
-		t.Error("missing skill type")
 	}
 }

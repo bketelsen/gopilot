@@ -34,8 +34,8 @@ func TestSettingsPageShowsSkills(t *testing.T) {
 	state := &mockState{}
 	cfg := &config.Config{}
 	loadedSkills := []*skills.Skill{
-		{Name: "git-commit", Type: "required", Description: "Handles git commits"},
-		{Name: "testing", Type: "optional", Description: "Runs tests"},
+		{Name: "git-commit", Description: "Handles git commits"},
+		{Name: "testing", Description: "Runs tests"},
 	}
 
 	srv := NewServer(state, cfg, nil, nil)
