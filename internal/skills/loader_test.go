@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -361,6 +362,55 @@ Process PDFs here.
 	}
 	if s.AllowedTools != "Bash(pdftotext:*) Read" {
 		t.Errorf("allowed-tools = %q", s.AllowedTools)
+	}
+}
+
+func TestDiscoverAgentsDirNotSkipped(t *testing.T) {
+	dir := t.TempDir()
+	agentsDir := filepath.Join(dir, ".agents", "skills", "my-skill")
+	os.MkdirAll(agentsDir, 0755)
+	os.WriteFile(filepath.Join(agentsDir, "SKILL.md"), []byte(`---
+name: my-skill
+description: Agent skill
+---
+Agent content.
+`), 0644)
+
+	skills, err := Discover([]string{dir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(skills) != 1 {
+		t.Fatalf("got %d skills, want 1 (.agents should not be skipped)", len(skills))
+	}
+	if skills[0].Name != "my-skill" {
+		t.Errorf("name = %q, want %q", skills[0].Name, "my-skill")
+	}
+}
+
+func TestDiscoverLocationIsAbsolute(t *testing.T) {
+	dir := t.TempDir()
+	skillDir := filepath.Join(dir, "my-skill")
+	os.MkdirAll(skillDir, 0755)
+	os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte(`---
+name: my-skill
+description: Test skill
+---
+Content.
+`), 0644)
+
+	skills, err := Discover([]string{dir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(skills) != 1 {
+		t.Fatalf("got %d skills, want 1", len(skills))
+	}
+	if !filepath.IsAbs(skills[0].Location) {
+		t.Errorf("location should be absolute, got %q", skills[0].Location)
+	}
+	if !strings.HasSuffix(skills[0].Location, "SKILL.md") {
+		t.Errorf("location should end with SKILL.md, got %q", skills[0].Location)
 	}
 }
 
