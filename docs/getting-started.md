@@ -112,6 +112,21 @@ gopilot
 
 Gopilot will begin its poll-dispatch-reconcile loop. You will see log messages as it polls for issues, claims them, creates workspaces, and launches agents.
 
+## Running from a Project Directory
+
+The gopilot binary is fully self-contained — all dashboard assets are embedded in the binary. You can place it on your `PATH` and run it from any directory.
+
+A typical per-project setup looks like this:
+
+```
+~/projects/my-project/
+├── gopilot.yaml        # project-specific config
+├── skills/             # project-specific skills (optional)
+└── workspaces/         # created at runtime
+```
+
+All relative paths in `gopilot.yaml` (such as `workspace.root` and `skills.dir`) resolve relative to the directory where you run the `gopilot` command, not relative to the binary location.
+
 ## Verify It Works
 
 With Gopilot running:

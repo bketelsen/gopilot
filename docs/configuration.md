@@ -62,7 +62,7 @@ Workspace directory and lifecycle hook settings.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `root` | string | — | Base directory where per-issue workspaces are created. |
+| `root` | string | — | Base directory where per-issue workspaces are created. Relative paths resolve from the working directory where `gopilot` is launched. |
 | `hook_timeout_ms` | int | `60000` (60s) | Maximum time in milliseconds for a single hook to run before it is killed. |
 
 ```yaml
@@ -185,7 +185,7 @@ Skill injection configuration. Skills are [agentskills.io](https://agentskills.i
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `dir` | string | — | Config-level directory containing SKILL.md files. The loader walks this directory up to 4 levels deep. |
+| `dir` | string | — | Config-level directory containing SKILL.md files. The loader walks this directory up to 4 levels deep. Relative paths resolve from the working directory where `gopilot` is launched. |
 | `required` | list of strings | — | Skill names always injected as full content into every prompt. |
 | `optional` | list of strings | — | Skill names presented as a catalog with file paths for on-demand activation by the agent. |
 
