@@ -8,7 +8,7 @@ An AI agent orchestrator that dispatches coding agents to work on GitHub issues 
 
 - **Poll-Dispatch-Reconcile loop** -- Continuously watches GitHub for eligible issues, dispatches agents, and reconciles state against the source of truth.
 - **Multi-agent support** -- GitHub Copilot CLI and Claude Code, with per-repo or per-label agent overrides.
-- **Skills injection** -- Enforce behavioral contracts (TDD, verification, debugging) via composable SKILL.md files injected into agent prompts.
+- **Skills injection** -- Enforce behavioral contracts (TDD, verification, debugging) via composable SKILL.md files injected into agent prompts. [agentskills.io](https://agentskills.io) compatible.
 - **Real-time dashboard** -- HTMX + SSE-powered web UI showing active agents, metrics, and logs with live updates.
 - **Config hot-reload** -- Change polling intervals, concurrency limits, agent selection, and skill settings without restarting.
 - **Retry with backoff** -- Failed agents get exponential backoff retries with stall detection and automatic cleanup.

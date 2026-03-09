@@ -111,7 +111,7 @@ The following settings require a full restart to take effect:
 | `internal/workspace/` | Workspace creation, hook execution |
 | `internal/web/` | Dashboard server, SSE hub, templ page templates |
 | `internal/prompt/` | Prompt template rendering |
-| `internal/skills/` | SKILL.md loader (frontmatter + markdown), injector |
+| `internal/skills/` | [agentskills.io](https://agentskills.io/specification)-compliant SKILL.md loader and injector. Supports multi-directory discovery (config-level + workspace `.agents/skills/`), with workspace skills overriding config-level skills by name. Uses progressive disclosure: required skills are injected as full content, optional skills appear as a catalog with file paths for on-demand activation. |
 | `internal/metrics/` | Token tracking and cost estimation |
 | `internal/config/` | YAML config structs, loader, fsnotify watcher |
 | `internal/planning/` | Dashboard-based interactive planning sessions (WebSocket chat, plan parser) |

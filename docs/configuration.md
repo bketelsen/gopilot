@@ -181,13 +181,17 @@ agent:
 
 ## `skills`
 
-Skill injection configuration. Skills are SKILL.md files that provide domain-specific instructions to the agent via the rendered prompt.
+Skill injection configuration. Skills are [agentskills.io](https://agentskills.io/specification)-compatible SKILL.md files that provide domain-specific instructions to the agent via the rendered prompt.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `dir` | string | — | Directory containing SKILL.md files. |
-| `required` | list of strings | — | Skill names always injected into every prompt. |
-| `optional` | list of strings | — | Skill names injected based on context (e.g., issue labels). |
+| `dir` | string | — | Config-level directory containing SKILL.md files. The loader walks this directory up to 4 levels deep. |
+| `required` | list of strings | — | Skill names always injected as full content into every prompt. |
+| `optional` | list of strings | — | Skill names presented as a catalog with file paths for on-demand activation by the agent. |
+
+In addition to the config-level `skills.dir`, workspace repositories can ship their own skills in a `.agents/skills/` directory at the repo root. These workspace-level skills are auto-discovered at dispatch time and require no configuration. If a workspace skill has the same name as a config-level skill, the workspace skill takes precedence.
+
+Skills are re-discovered from disk whenever the config file changes (via fsnotify hot-reload).
 
 For details on authoring skills, see the [Skills documentation](skills.md).
 
