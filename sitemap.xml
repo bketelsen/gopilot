@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+    <url>
+         <loc>https://bketelsen.github.io/gopilot/</loc>
+         <lastmod>2026-03-09</lastmod>
+    </url>
+    <url>
+         <loc>https://bketelsen.github.io/gopilot/architecture/</loc>
+         <lastmod>2026-03-09</lastmod>
+    </url>
+    <url>
+         <loc>https://bketelsen.github.io/gopilot/cli/</loc>
+         <lastmod>2026-03-09</lastmod>
+    </url>
+    <url>
+         <loc>https://bketelsen.github.io/gopilot/configuration/</loc>
+         <lastmod>2026-03-09</lastmod>
+    </url>
+    <url>
+         <loc>https://bketelsen.github.io/gopilot/dashboard/</loc>
+         <lastmod>2026-03-09</lastmod>
+    </url>
+    <url>
+         <loc>https://bketelsen.github.io/gopilot/getting-started/</loc>
+         <lastmod>2026-03-09</lastmod>
+    </url>
+    <url>
+         <loc>https://bketelsen.github.io/gopilot/skills/</loc>
+         <lastmod>2026-03-09</lastmod>
+    </url>
+</urlset>
