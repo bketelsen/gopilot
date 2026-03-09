@@ -146,6 +146,8 @@ func parseSkillFile(path string) (*Skill, error) {
 		return nil, fmt.Errorf("skill at %s has no description in frontmatter", path)
 	}
 
+	validateName(skill.Name, filepath.Dir(path))
+
 	absPath, err := filepath.Abs(path)
 	if err != nil {
 		absPath = path
@@ -153,4 +155,25 @@ func parseSkillFile(path string) (*Skill, error) {
 	skill.Location = absPath
 
 	return skill, nil
+}
+
+// validateName checks the skill name against agentskills.io naming rules.
+// Warns on violations but does not reject the skill (lenient mode).
+func validateName(name, parentDir string) {
+	if len(name) > 64 {
+		slog.Warn("skill name exceeds 64 characters", "name", name)
+	}
+	if name != strings.ToLower(name) {
+		slog.Warn("skill name should be lowercase", "name", name)
+	}
+	if strings.HasPrefix(name, "-") || strings.HasSuffix(name, "-") {
+		slog.Warn("skill name should not start or end with hyphen", "name", name)
+	}
+	if strings.Contains(name, "--") {
+		slog.Warn("skill name should not contain consecutive hyphens", "name", name)
+	}
+	dirName := filepath.Base(parentDir)
+	if dirName != name {
+		slog.Warn("skill name does not match parent directory", "name", name, "dir", dirName)
+	}
 }

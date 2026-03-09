@@ -1,6 +1,7 @@
 package skills
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -360,5 +361,42 @@ Process PDFs here.
 	}
 	if s.AllowedTools != "Bash(pdftotext:*) Read" {
 		t.Errorf("allowed-tools = %q", s.AllowedTools)
+	}
+}
+
+func TestNameValidationWarnings(t *testing.T) {
+	tests := []struct {
+		name      string
+		dirName   string
+		skillName string
+		wantLoad  bool
+	}{
+		{"valid name", "code-review", "code-review", true},
+		{"uppercase warns but loads", "my-skill", "My-Skill", true},
+		{"name mismatch warns but loads", "my-skill", "other-name", true},
+		{"consecutive hyphens warns but loads", "my--skill", "my--skill", true},
+		{"leading hyphen warns but loads", "-my-skill", "-my-skill", true},
+		{"empty name skips", "empty", "", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			skillDir := filepath.Join(dir, tt.dirName)
+			os.MkdirAll(skillDir, 0755)
+
+			fm := fmt.Sprintf("---\nname: %s\ndescription: test skill\n---\nBody.", tt.skillName)
+			os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte(fm), 0644)
+
+			skills, err := Discover([]string{dir})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tt.wantLoad && len(skills) != 1 {
+				t.Errorf("got %d skills, want 1", len(skills))
+			}
+			if !tt.wantLoad && len(skills) != 0 {
+				t.Errorf("got %d skills, want 0", len(skills))
+			}
+		})
 	}
 }
