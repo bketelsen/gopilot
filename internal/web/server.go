@@ -2,7 +2,9 @@ package web
 
 import (
 	"context"
+	"embed"
 	"encoding/json"
+	"io/fs"
 	"log/slog"
 	"net/http"
 	"os/exec"
@@ -17,6 +19,9 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 )
+
+//go:embed static/*
+var staticFiles embed.FS
 
 // StateProvider abstracts access to orchestrator state to avoid circular imports.
 type StateProvider interface {
@@ -96,7 +101,8 @@ func (s *Server) buildRouter() chi.Router {
 		r.Post("/refresh", s.handleRefresh)
 	})
 
-	r.Handle("/static/*", http.StripPrefix("/static/", http.FileServer(http.Dir("internal/web/static"))))
+	staticSub, _ := fs.Sub(staticFiles, "static")
+	r.Handle("/static/*", http.StripPrefix("/static/", http.FileServer(http.FS(staticSub))))
 	r.Get("/", s.handleDashboardPage)
 	r.Get("/issues/{owner}/{repo}/{id}", s.handleIssueDetail)
 	r.Get("/sprint", s.handleSprintPage)
