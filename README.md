@@ -2,6 +2,8 @@
 
 An AI agent orchestrator that dispatches coding agents to work on GitHub issues autonomously.
 
+**Experimental**
+
 ![Gopilot Dashboard](docs/assets/dashboard-placeholder.png)
 
 ## Key Features
