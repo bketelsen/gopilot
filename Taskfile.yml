@@ -68,7 +68,7 @@ tasks:
       - test -f bin/svu
     cmds:
       - mkdir -p bin
-      - curl -sSfL https://github.com/caarlos0/svu/releases/latest/download/svu_linux_amd64.tar.gz | tar xz -C bin svu
+      - gh release download --repo caarlos0/svu --pattern 'svu_*_linux_amd64.tar.gz' --output - | tar xz -C bin svu
 
   bump:
     desc: Tag a new version with svu
