@@ -40,42 +40,30 @@ Before you begin, make sure you have:
 
 ## Initialize Configuration
 
-Run the init command to generate a starter configuration file:
+Create an empty directory for your gopilot workspace and run the interactive setup wizard:
 
 ```bash
+mkdir my-project && cd my-project
 gopilot init
 ```
 
-This creates `gopilot.yaml` in the current directory. Open it and edit the key fields:
+The wizard walks you through:
 
-| Field | Description |
-|-------|-------------|
-| `github.token` | Your GitHub token. Use `$GITHUB_TOKEN` to read from an environment variable. |
-| `github.repos` | List of repositories to watch, in `owner/repo` format. |
-| `github.eligible_labels` | Labels that mark an issue as eligible for agent dispatch. |
-| `agent.command` | Which agent to use: `copilot` or `claude-code`. |
+1. **GitHub token** — your personal access token (auto-detects `$GITHUB_TOKEN` from environment)
+2. **Repositories** — which repos to monitor (comma-separated `owner/repo` format)
+3. **Agent** — choose between Claude Code (`claude`) or GitHub Copilot CLI (`copilot`)
+4. **Skills** — select from built-in skills to install and configure as required or optional
 
-Here is a minimal working configuration:
+After completing the wizard, your directory will contain:
 
-```yaml
-github:
-  token: $GITHUB_TOKEN
-  repos:
-    - owner/repo
-  eligible_labels:
-    - gopilot
-polling:
-  interval_ms: 30000
-  max_concurrent_agents: 3
-agent:
-  command: copilot
-  model: claude-sonnet-4.6
-dashboard:
-  enabled: true
-  addr: ":3000"
+```
+my-project/
+├── gopilot.yaml        # configured with your settings
+├── skills/             # selected skill definitions
+└── workspaces/         # agent workspace directory
 ```
 
-Replace `owner/repo` with your actual repository and make sure `GITHUB_TOKEN` is set in your environment.
+Edit `gopilot.yaml` to adjust advanced settings like polling intervals, concurrency limits, dashboard configuration, and workspace hooks. See the [Configuration](configuration.md) guide for all available options.
 
 ## Set Up Repository Labels
 

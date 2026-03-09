@@ -31,19 +31,19 @@ binary on your `PATH`.
 
 ### Getting Started
 
-Initialize a configuration file and start the orchestrator:
+Run the interactive setup wizard in an empty directory:
 
 ```bash
+mkdir my-project && cd my-project
 gopilot init
-# Edit gopilot.yaml with your token and repos
 gopilot setup
 gopilot
 ```
 
-The `init` command creates a `gopilot.yaml` in the current directory with
-sensible defaults. Edit it to add your GitHub token, target repositories,
-and preferred agent settings. Run `gopilot setup` to create the required
-labels on your repos, then run `gopilot` to start the orchestrator.
+The `init` wizard guides you through configuring your GitHub token,
+repositories, agent selection, and skill installation. Run `gopilot setup`
+to create the required labels on your repos, then run `gopilot` to start
+the orchestrator.
 
 ## Building from Source
 
