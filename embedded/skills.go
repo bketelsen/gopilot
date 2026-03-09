@@ -103,5 +103,5 @@ func parseFrontmatter(data []byte) (SkillInfo, error) {
 		return SkillInfo{}, fmt.Errorf("missing name")
 	}
 
-	return SkillInfo{Name: fm.Name, Description: fm.Description}, nil
+	return SkillInfo(fm), nil
 }
