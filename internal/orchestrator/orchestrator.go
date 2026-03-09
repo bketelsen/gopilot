@@ -8,6 +8,8 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -63,7 +65,7 @@ func NewOrchestrator(cfg *config.Config, github gh.Client, agents map[string]age
 		o.configPath = configPath[0]
 	}
 
-	allSkills, err := skills.LoadFromDir(cfg.Skills.Dir)
+	allSkills, err := skills.Discover([]string{cfg.Skills.Dir})
 	if err != nil {
 		slog.Warn("failed to load skills", "error", err)
 	}
@@ -346,7 +348,18 @@ func (o *Orchestrator) dispatch(ctx context.Context, issue domain.Issue, attempt
 		return
 	}
 
-	skillText := skills.InjectSkills(o.skills, o.cfg.Skills.Required, o.cfg.Skills.Optional)
+	// Discover skills from config dir + workspace .agents/skills/ if present.
+	skillDirs := []string{o.cfg.Skills.Dir}
+	wsAgentsSkills := filepath.Join(wsPath, ".agents", "skills")
+	if info, statErr := os.Stat(wsAgentsSkills); statErr == nil && info.IsDir() {
+		skillDirs = append(skillDirs, wsAgentsSkills)
+	}
+	dispatchSkills, discoverErr := skills.Discover(skillDirs)
+	if discoverErr != nil {
+		log.Warn("skill discovery failed, using config skills", "error", discoverErr)
+		dispatchSkills = o.skills
+	}
+	skillText := skills.InjectSkills(dispatchSkills, o.cfg.Skills.Required, o.cfg.Skills.Optional)
 	rendered, err := prompt.Render(o.cfg.Prompt, issue, attempt, skillText)
 	if err != nil {
 		log.Error("prompt render failed", "error", err)
@@ -738,7 +751,18 @@ func (o *Orchestrator) dispatchPRFix(ctx context.Context, fix *domain.PRFixEntry
 		return
 	}
 
-	skillText := skills.InjectSkills(o.skills, o.cfg.Skills.Required, o.cfg.Skills.Optional)
+	// Discover skills from config dir + workspace .agents/skills/ if present.
+	prSkillDirs := []string{o.cfg.Skills.Dir}
+	prWsAgentsSkills := filepath.Join(wsPath, ".agents", "skills")
+	if info, statErr := os.Stat(prWsAgentsSkills); statErr == nil && info.IsDir() {
+		prSkillDirs = append(prSkillDirs, prWsAgentsSkills)
+	}
+	prDispatchSkills, discoverErr := skills.Discover(prSkillDirs)
+	if discoverErr != nil {
+		log.Warn("skill discovery failed for PR fix, using config skills", "error", discoverErr)
+		prDispatchSkills = o.skills
+	}
+	skillText := skills.InjectSkills(prDispatchSkills, o.cfg.Skills.Required, o.cfg.Skills.Optional)
 	rendered, err := prompt.RenderPRFix(fix.PR, fix.PR.FailedCheckRuns(), fix.Attempt, skillText)
 	if err != nil {
 		log.Error("PR fix prompt render failed", "error", err)
