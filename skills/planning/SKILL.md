@@ -1,8 +1,11 @@
 ---
 name: planning
-description: Guide interactive planning conversations in GitHub issues
-type: rigid
+description: >-
+  Guide interactive planning conversations for decomposing feature ideas
+  into actionable GitHub issues. Use for planning sessions on GitHub issues.
 ---
+
+> This is a strict workflow. Follow each step exactly as written.
 
 ## Role
 

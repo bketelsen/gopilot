@@ -1,8 +1,11 @@
 ---
 name: pr-workflow
-description: Use when creating branches, commits, and pull requests
-type: rigid
+description: >-
+  Branch, commit, and pull request workflow for submitting code changes.
+  Use when creating branches, making commits, or opening pull requests.
 ---
+
+> This is a strict workflow. Follow each step exactly as written.
 
 ## Iron Law
 

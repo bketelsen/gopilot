@@ -1,8 +1,11 @@
 ---
 name: code-review
-description: Use when reviewing code changes made by another agent or developer
-type: flexible
+description: >-
+  Code review checklist for reviewing changes made by another agent or
+  developer. Use when evaluating pull requests or completed work.
 ---
+
+Adapt this checklist to the context of the changes being reviewed.
 
 ## Approach
 

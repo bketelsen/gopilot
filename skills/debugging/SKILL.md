@@ -1,7 +1,8 @@
 ---
 name: debugging
-description: Use when encountering bugs, test failures, or unexpected behavior
-type: technique
+description: >-
+  Systematic debugging process for any bug, test failure, or unexpected
+  behavior. Use when encountering errors or when code does not behave as expected.
 ---
 
 ## Workflow

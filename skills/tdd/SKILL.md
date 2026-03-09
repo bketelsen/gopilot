@@ -1,8 +1,11 @@
 ---
 name: tdd
-description: Use when implementing any code change, feature, or bug fix
-type: rigid
+description: >-
+  Test-driven development workflow for implementing code changes, features,
+  or bug fixes. Use when writing any new code or modifying existing behavior.
 ---
+
+> This is a strict workflow. Follow each step exactly as written.
 
 ## Iron Law
 

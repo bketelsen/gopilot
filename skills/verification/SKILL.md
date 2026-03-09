@@ -1,8 +1,11 @@
 ---
 name: verification
-description: Use when completing any task before claiming it is done
-type: rigid
+description: >-
+  Verification checklist for completing any task. Use before claiming work
+  is done to ensure tests pass, code builds, and linter is clean.
 ---
+
+> This is a strict workflow. Follow each step exactly as written.
 
 ## Iron Law
 
