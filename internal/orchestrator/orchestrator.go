@@ -99,6 +99,15 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 			o.cfg.PRMonitoring = newCfg.PRMonitoring
 			o.cfg.Skills = newCfg.Skills
 			o.cfg.Prompt = newCfg.Prompt
+
+			// Re-discover skills from disk on config change.
+			reloadedSkills, reloadErr := skills.Discover([]string{newCfg.Skills.Dir})
+			if reloadErr != nil {
+				slog.Warn("failed to reload skills on config change", "error", reloadErr)
+			} else {
+				o.skills = reloadedSkills
+				slog.Info("skills reloaded", "count", len(reloadedSkills))
+			}
 		})
 		if err != nil {
 			slog.Warn("failed to start config watcher", "error", err)
