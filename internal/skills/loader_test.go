@@ -309,3 +309,56 @@ Content.
 		t.Errorf("got %d skills, want 1 (depth 4 should be within limit of 5)", len(skills))
 	}
 }
+
+func TestLoadSkillFoldedScalar(t *testing.T) {
+	dir := t.TempDir()
+	skillDir := filepath.Join(dir, "pdf-processing")
+	os.MkdirAll(skillDir, 0755)
+
+	content := `---
+name: pdf-processing
+description: >-
+  Extract text and tables from PDF files.
+  Use when working with PDF documents.
+license: Apache-2.0
+compatibility: Requires poppler-utils
+metadata:
+  author: example-org
+  version: "1.0"
+allowed-tools: Bash(pdftotext:*) Read
+---
+
+## Instructions
+Process PDFs here.
+`
+	os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte(content), 0644)
+
+	skills, err := Discover([]string{dir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(skills) != 1 {
+		t.Fatalf("got %d skills, want 1", len(skills))
+	}
+	s := skills[0]
+	if s.Name != "pdf-processing" {
+		t.Errorf("name = %q, want %q", s.Name, "pdf-processing")
+	}
+	// Folded scalar should join the two lines with a space
+	wantDesc := "Extract text and tables from PDF files. Use when working with PDF documents."
+	if s.Description != wantDesc {
+		t.Errorf("description = %q, want %q", s.Description, wantDesc)
+	}
+	if s.License != "Apache-2.0" {
+		t.Errorf("license = %q", s.License)
+	}
+	if s.Compatibility != "Requires poppler-utils" {
+		t.Errorf("compatibility = %q", s.Compatibility)
+	}
+	if s.Metadata["author"] != "example-org" {
+		t.Errorf("metadata author = %q", s.Metadata["author"])
+	}
+	if s.AllowedTools != "Bash(pdftotext:*) Read" {
+		t.Errorf("allowed-tools = %q", s.AllowedTools)
+	}
+}
